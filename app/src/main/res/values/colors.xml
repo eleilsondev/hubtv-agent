@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="fundo">#0E1116</color>
+    <color name="painel">#161B22</color>
+    <color name="borda">#28323E</color>
+    <color name="texto">#E6EDF3</color>
+    <color name="suave">#94A2B0</color>
+    <color name="fraco">#66727E</color>
+    <color name="ok">#34D399</color>
+    <color name="accent">#34D399</color>
+    <color name="perigo">#F87171</color>
+</resources>

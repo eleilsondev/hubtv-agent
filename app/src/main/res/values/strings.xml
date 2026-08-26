@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">HUB TV Agente</string>
+    <string name="subtitulo">cliente ADB embutido — teste da Etapa 1</string>
+
+    <string name="verificando">verificando…</string>
+    <string name="registro">REGISTRO</string>
+    <string name="limpar">limpar</string>
+
+    <string name="passo_parear">1 — PAREAR (só na primeira vez: Depuração sem fio › Parear dispositivo)</string>
+    <string name="porta">porta</string>
+    <string name="codigo">código</string>
+    <string name="parear">Parear</string>
+
+    <string name="ligar_depuracao">Ligar depuração</string>
+    <string name="conectar">Conectar</string>
+    <string name="testar">Testar poderes</string>
+    <string name="fixar_porta">Fixar porta 5555</string>
+</resources>

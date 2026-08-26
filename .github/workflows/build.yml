@@ -1,0 +1,57 @@
+name: Compilar APK
+
+# Roda a cada envio para a main e tambem sob demanda pelo botao "Run workflow".
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write   # necessario para publicar a Release com o APK
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar o codigo
+        uses: actions/checkout@v4
+
+      - name: Preparar o Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Preparar o Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Gerar o Gradle wrapper
+        run: gradle wrapper --gradle-version 8.7
+
+      - name: Compilar o APK de debug
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Renomear com data e numero da build
+        run: |
+          mkdir -p entrega
+          cp app/build/outputs/apk/debug/app-debug.apk \
+             "entrega/HubTVAgente-b${{ github.run_number }}.apk"
+
+      # 1) fica disponivel como "artifact" da execucao (baixavel na aba Actions)
+      - name: Anexar o APK a execucao
+        uses: actions/upload-artifact@v4
+        with:
+          name: HubTVAgente-apk
+          path: entrega/*.apk
+          if-no-files-found: error
+
+      # 2) e tambem publica uma Release com link fixo de download
+      - name: Publicar a Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: HUB TV Agente - build ${{ github.run_number }}
+          body: |
+            APK de teste da Etapa 1, compilado automaticamente.
+            Baixe o arquivo .apk abaixo e instale no aparelho.
+          files: entrega/*.apk
