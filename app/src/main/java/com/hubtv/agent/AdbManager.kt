@@ -3,12 +3,17 @@ package com.hubtv.agent
 import android.content.Context
 import android.os.Build
 import io.github.muntashirakon.adb.AbsAdbConnectionManager
+import org.bouncycastle.asn1.DERNull
+import org.bouncycastle.asn1.nist.NISTObjectIdentifiers
+import org.bouncycastle.asn1.pkcs.PKCSObjectIdentifiers
 import org.bouncycastle.asn1.x500.X500NameBuilder
 import org.bouncycastle.asn1.x500.style.BCStyle
-import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter
-import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder
-import org.bouncycastle.jce.provider.BouncyCastleProvider
-import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder
+import org.bouncycastle.asn1.x509.AlgorithmIdentifier
+import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo
+import org.bouncycastle.cert.X509v3CertificateBuilder
+import org.bouncycastle.crypto.util.PrivateKeyFactory
+import org.bouncycastle.operator.bc.BcRSAContentSignerBuilder
+import java.io.ByteArrayInputStream
 import java.io.File
 import java.math.BigInteger
 import java.security.KeyFactory
@@ -16,7 +21,6 @@ import java.security.KeyPair
 import java.security.KeyPairGenerator
 import java.security.PrivateKey
 import java.security.SecureRandom
-import java.security.Security
 import java.security.cert.CertificateFactory
 import java.security.cert.X509Certificate
 import java.security.spec.PKCS8EncodedKeySpec
@@ -45,9 +49,6 @@ class AdbManager private constructor(context: Context) : AbsAdbConnectionManager
     val identidadeNova: Boolean
 
     init {
-        Security.removeProvider(BouncyCastleProvider.PROVIDER_NAME)
-        Security.addProvider(BouncyCastleProvider())
-
         api = Build.VERSION.SDK_INT
 
         if (arquivoChave.exists() && arquivoCert.exists()) {
@@ -97,16 +98,31 @@ class AdbManager private constructor(context: Context) : AbsAdbConnectionManager
         // quanto o aparelho ficar em campo
         val fim = Calendar.getInstance().apply { add(Calendar.YEAR, 30) }
 
-        val construtor = JcaX509v3CertificateBuilder(
+        // Assinatura pela API de BAIXO NIVEL do BouncyCastle (builders "Bc").
+        // Os algoritmos sao fixados na mao para NAO passar pelo
+        // DefaultSignatureNameFinder - a classe que quebrava com
+        // NoClassDefFoundError (EdECObjectIdentifiers) na versao anterior.
+        val algAssinatura = AlgorithmIdentifier(
+            PKCSObjectIdentifiers.sha256WithRSAEncryption, DERNull.INSTANCE
+        )
+        val algDigest = AlgorithmIdentifier(NISTObjectIdentifiers.id_sha256)
+        val chaveParam = PrivateKeyFactory.createKey(par.private.encoded)
+        val assinador = BcRSAContentSignerBuilder(algAssinatura, algDigest).build(chaveParam)
+
+        val spki = SubjectPublicKeyInfo.getInstance(par.public.encoded)
+        val holder = X509v3CertificateBuilder(
             nome,
             BigInteger.valueOf(System.currentTimeMillis()),
             inicio.time,
             fim.time,
             nome,
-            par.public
-        )
-        val assinador = JcaContentSignerBuilder("SHA512withRSA").build(par.private)
-        val cert = JcaX509CertificateConverter().getCertificate(construtor.build(assinador))
+            spki
+        ).build(assinador)
+
+        // Converte o certificado DER usando a fabrica do proprio Android,
+        // sem depender do JcaX509CertificateConverter.
+        val cert = CertificateFactory.getInstance("X.509")
+            .generateCertificate(ByteArrayInputStream(holder.encoded)) as X509Certificate
 
         arquivoChave.writeBytes(par.private.encoded)
         arquivoCert.writeBytes(cert.encoded)

@@ -80,13 +80,25 @@ object Adb {
                 val gerente = AdbManager.get(context)
                 if (gerente.isConnected) return@withContext Resultado.Ok("ja conectado")
 
-                Registro.linha("procurando o adbd local...")
+                // 1) caminho legado: porta TCP fixa (tcpip 5555). Se o adbd
+                //    estiver nesse modo, conectar aqui dispara o dialogo
+                //    classico "sempre permitir" - UM toque, SEM codigo.
+                try {
+                    if (gerente.connect(HOST, 5555)) {
+                        Registro.linha("conectado ao adbd em $HOST:5555 (modo TCP)")
+                        return@withContext Resultado.Ok("conectado")
+                    }
+                } catch (_: Throwable) { /* 5555 fechado: segue para o mDNS */ }
+
+                // 2) depuracao sem fio (TLS): porta muda a cada boot, descoberta
+                //    por mDNS interno. Precisa de pareamento previo uma vez.
+                Registro.linha("procurando o adbd (depuracao sem fio)...")
                 val ok = gerente.autoConnect(context, tempoLimiteMs)
                 if (ok) {
                     Registro.linha("conectado ao adbd em $HOST")
                     Resultado.Ok("conectado")
                 } else {
-                    Resultado.Falha("nenhuma porta do adbd respondeu")
+                    Resultado.Falha("nenhuma porta do adbd respondeu (pareie uma vez, ou ative o modo TCP pelo HubTV)")
                 }
             } catch (e: Throwable) {
                 Resultado.Falha("erro ao conectar: ${e.message}", e)
