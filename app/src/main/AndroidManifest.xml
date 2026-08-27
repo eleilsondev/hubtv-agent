@@ -24,6 +24,7 @@
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
 
     <application
+        android:name=".AgentApp"
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:banner="@drawable/banner"
