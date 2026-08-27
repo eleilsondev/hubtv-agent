@@ -1,9 +1,13 @@
 name: Compilar APK
 
 # Roda a cada envio para a main e tambem sob demanda pelo botao "Run workflow".
+# Mudancas so em documentacao (.md) nao disparam build - evita recompilar o
+# mesmo APK a toa quando editamos so o CLAUDE.md/README.
 on:
   push:
     branches: [ main ]
+    paths-ignore:
+      - '**.md'
   workflow_dispatch:
 
 permissions:
