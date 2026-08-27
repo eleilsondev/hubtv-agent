@@ -3,15 +3,7 @@ package com.hubtv.agent
 import android.content.Context
 import android.os.Build
 import io.github.muntashirakon.adb.AbsAdbConnectionManager
-import sun.security.x509.AlgorithmId
-import sun.security.x509.CertificateAlgorithmId
-import sun.security.x509.CertificateSerialNumber
-import sun.security.x509.CertificateValidity
-import sun.security.x509.CertificateVersion
-import sun.security.x509.CertificateX509Key
-import sun.security.x509.X500Name
-import sun.security.x509.X509CertImpl
-import sun.security.x509.X509CertInfo
+import java.io.ByteArrayInputStream
 import java.io.File
 import java.math.BigInteger
 import java.security.KeyFactory
@@ -19,10 +11,14 @@ import java.security.KeyPair
 import java.security.KeyPairGenerator
 import java.security.PrivateKey
 import java.security.SecureRandom
+import java.security.Signature
 import java.security.cert.CertificateFactory
 import java.security.cert.X509Certificate
 import java.security.spec.PKCS8EncodedKeySpec
+import java.text.SimpleDateFormat
 import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 
 /**
  * A identidade do agente perante o adbd.
@@ -30,15 +26,12 @@ import java.util.Date
  * O app se apresenta como se fosse um computador: gera um par de chaves RSA
  * e assina o handshake do ADB com ele. Quando alguem marca "sempre permitir"
  * no dialogo da TV, o Android grava a chave publica em /data/misc/adb/adb_keys.
+ * Esse arquivo sobrevive ao reboot, entao a chave e gerada UMA vez.
  *
- * Esse arquivo sobrevive ao reboot. Por isso a chave e gerada UMA vez e
- * guardada no armazenamento privado do app - regerar significaria perder a
- * autorizacao e precisar de um PC outra vez.
- *
- * O certificado e criado com sun.security.x509 (via a lib sun-security-android),
- * que e o caminho recomendado pela propria libadb. Tentar isso com BouncyCastle
- * no Android quebra por classes que faltam no classpath - foi o que derrubou
- * as versoes anteriores.
+ * O certificado X.509 e montado aqui na mao (DER puro). Isso evita de vez as
+ * bibliotecas que quebravam no Android: o BouncyCastle some classes de ASN.1
+ * do classpath, e o sun-security-android e descartado pelo AGP por trazer
+ * classes no namespace 'sun.*'. Com DER manual so usamos java.security.
  */
 class AdbManager private constructor(context: Context) : AbsAdbConnectionManager() {
 
@@ -67,9 +60,7 @@ class AdbManager private constructor(context: Context) : AbsAdbConnectionManager
     }
 
     override fun getPrivateKey(): PrivateKey = chavePrivada
-
     override fun getCertificate(): X509Certificate = certificado
-
     override fun getDeviceName(): String = NOME_NO_DIALOGO
 
     // -----------------------------------------------------------------
@@ -91,32 +82,84 @@ class AdbManager private constructor(context: Context) : AbsAdbConnectionManager
         gerador.initialize(2048, SecureRandom())
         val par: KeyPair = gerador.generateKeyPair()
 
+        val certDer = montarCertificado(par)
+        val cert = CertificateFactory.getInstance("X.509")
+            .generateCertificate(ByteArrayInputStream(certDer)) as X509Certificate
+
+        arquivoChave.writeBytes(par.private.encoded)
+        arquivoCert.writeBytes(certDer)
+        return Pair(par.private, cert)
+    }
+
+    /**
+     * Monta um certificado X.509 v1 auto-assinado, em DER, sem bibliotecas.
+     * O adbd so precisa de um certificado bem-formado; no fluxo TCP legado
+     * (tcpip 5555) o que vale mesmo e a chave publica.
+     */
+    private fun montarCertificado(par: KeyPair): ByteArray {
         val agora = System.currentTimeMillis()
         val inicio = Date(agora - 24L * 60 * 60 * 1000)          // ontem
         val fim = Date(agora + 30L * 365 * 24 * 60 * 60 * 1000)  // ~30 anos
-        val dono = X500Name("CN=HubTV Agent, O=HubTV")
 
-        val info = X509CertInfo()
-        info.set(X509CertInfo.VERSION, CertificateVersion(CertificateVersion.V3))
-        info.set(X509CertInfo.SERIAL_NUMBER, CertificateSerialNumber(BigInteger.valueOf(agora)))
-        info.set(X509CertInfo.SUBJECT, dono)
-        info.set(X509CertInfo.ISSUER, dono)
-        info.set(X509CertInfo.KEY, CertificateX509Key(par.public))
-        info.set(X509CertInfo.VALIDITY, CertificateValidity(inicio, fim))
-        info.set(X509CertInfo.ALGORITHM_ID, CertificateAlgorithmId(AlgorithmId.get("SHA256withRSA")))
+        // AlgorithmIdentifier: sha256WithRSAEncryption (1.2.840.113549.1.1.11) + NULL
+        val algId = seq(cat(
+            oid(bytes(0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x01, 0x0B)),
+            nulo()
+        ))
 
-        // Assina, le o algoritmo real de volta e reassina - idioma padrao do
-        // sun.security para que o algoritmo entre corretamente no certificado.
-        var cert = X509CertImpl(info)
-        cert.sign(par.private, "SHA256withRSA")
-        val algReal = cert.get(X509CertImpl.SIG_ALG) as AlgorithmId
-        info.set(CertificateAlgorithmId.NAME + "." + CertificateAlgorithmId.ALGORITHM, algReal)
-        cert = X509CertImpl(info)
-        cert.sign(par.private, "SHA256withRSA")
+        // Name = SEQUENCE OF SET OF { OID(CN=2.5.4.3), UTF8String "HubTV Agent" }
+        val nome = seq(set(seq(cat(
+            oid(bytes(0x55, 0x04, 0x03)),
+            tlv(0x0C, "HubTV Agent".toByteArray(Charsets.UTF_8))
+        ))))
 
-        arquivoChave.writeBytes(par.private.encoded)
-        arquivoCert.writeBytes(cert.encoded)
-        return Pair(par.private, cert)
+        val serial = tlv(0x02, BigInteger.valueOf(agora).toByteArray())
+        val validade = seq(cat(gtime(inicio), gtime(fim)))
+        val spki = par.public.encoded  // ja e o SubjectPublicKeyInfo em DER
+
+        // TBSCertificate (v1: sem campo version)
+        val tbs = seq(cat(serial, algId, nome, validade, nome, spki))
+
+        val assinatura = Signature.getInstance("SHA256withRSA").run {
+            initSign(par.private)
+            update(tbs)
+            sign()
+        }
+        val bitSig = tlv(0x03, cat(bytes(0x00), assinatura))  // BIT STRING, 0 bits nao usados
+
+        return seq(cat(tbs, algId, bitSig))
+    }
+
+    // ---- codificador DER minimo ----
+    private fun bytes(vararg v: Int) = ByteArray(v.size) { v[it].toByte() }
+    private fun cat(vararg partes: ByteArray): ByteArray {
+        var total = 0; for (p in partes) total += p.size
+        val out = ByteArray(total); var o = 0
+        for (p in partes) { System.arraycopy(p, 0, out, o, p.size); o += p.size }
+        return out
+    }
+    private fun tlv(tag: Int, conteudo: ByteArray): ByteArray {
+        val comp = if (conteudo.size < 0x80) {
+            byteArrayOf(conteudo.size.toByte())
+        } else {
+            var v = conteudo.size
+            val tmp = ArrayList<Byte>()
+            while (v > 0) { tmp.add(0, (v and 0xFF).toByte()); v = v ushr 8 }
+            val b = ByteArray(tmp.size + 1)
+            b[0] = (0x80 or tmp.size).toByte()
+            for (i in tmp.indices) b[i + 1] = tmp[i]
+            b
+        }
+        return cat(byteArrayOf(tag.toByte()), comp, conteudo)
+    }
+    private fun seq(c: ByteArray) = tlv(0x30, c)
+    private fun set(c: ByteArray) = tlv(0x31, c)
+    private fun oid(c: ByteArray) = tlv(0x06, c)
+    private fun nulo() = tlv(0x05, ByteArray(0))
+    private fun gtime(d: Date): ByteArray {
+        val fmt = SimpleDateFormat("yyyyMMddHHmmss'Z'", Locale.ROOT)
+        fmt.timeZone = TimeZone.getTimeZone("UTC")
+        return tlv(0x18, fmt.format(d).toByteArray(Charsets.US_ASCII))  // GeneralizedTime
     }
 
     companion object {

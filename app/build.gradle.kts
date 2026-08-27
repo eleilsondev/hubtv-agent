@@ -52,9 +52,8 @@ dependencies {
     // ---- o coracao do agente ----
     implementation("com.github.MuntashirAkon:libadb-android:3.1.1")
     implementation("org.conscrypt:conscrypt-android:2.5.3")
-    // Gera o certificado X509 auto-assinado com sun.security.x509, que o
-    // Android removeu do SDK. Este pacote reintroduz essas classes. E o
-    // caminho recomendado pela libadb - o BouncyCastle no Android quebra
-    // por classes de ASN.1 que faltam no classpath em tempo de execucao.
-    implementation("com.github.MuntashirAkon:sun-security-android:1.1")
+    // O certificado X509 e montado a mao (DER puro) dentro do AdbManager,
+    // sem nenhuma biblioteca: o BouncyCastle some classes de ASN.1 no
+    // runtime e o sun-security-android e descartado pelo AGP. Zero deps de
+    // cripto aqui e a unica forma que compila e roda de forma confiavel.
 }
