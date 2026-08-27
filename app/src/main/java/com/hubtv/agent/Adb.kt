@@ -154,20 +154,40 @@ object Adb {
     }
 
     /**
-     * Fixa a porta do adbd em 5555 e reinicia o servico.
-     * Com a porta fixa, a reconexao apos o boot deixa de depender de
-     * descoberta - basta bater em 127.0.0.1:5555.
+     * Fixa a porta do adbd em 5555 de forma PERSISTENTE e reinicia o servico.
      *
-     * Nem todo firmware aceita; o retorno diz o que aconteceu.
+     * O ponto critico do desligamento total (nao um simples reboot): a
+     * propriedade de runtime `service.adb.tcp.port` some no boot frio. Quem
+     * sobrevive e a propriedade persistente `persist.adb.tcp.port`, que o
+     * init restaura a cada boot nos firmwares que a respeitam. Com ela + a
+     * chave ja gravada em adb_keys, a reconexao apos o boot fica direta:
+     * 127.0.0.1:5555, sem dialogo e sem codigo.
+     *
+     * Setamos as duas: a persistente (para o proximo boot) e a de runtime
+     * (para valer ja nesta sessao). Nem todo firmware aceita; o retorno diz.
      */
     suspend fun fixarPorta5555(context: Context): Resultado =
         withContext(Dispatchers.IO) {
+            // 1) persistente - e o que faz a porta voltar apos desligar 100%
+            shell(context, "setprop persist.adb.tcp.port 5555")
+            // 2) runtime - vale para a sessao atual
             when (val r = shell(context, "setprop service.adb.tcp.port 5555")) {
                 is Resultado.Falha -> r
                 is Resultado.Ok -> {
                     shell(context, "stop adbd")
                     shell(context, "start adbd")
-                    Registro.linha("porta do adbd fixada em 5555")
+
+                    // confere se a persistente pegou (alguns firmwares ignoram)
+                    val persist = when (val p = shell(context, "getprop persist.adb.tcp.port")) {
+                        is Resultado.Ok -> p.saida.trim()
+                        is Resultado.Falha -> ""
+                    }
+                    if (persist == "5555") {
+                        Registro.linha("porta 5555 fixada de forma PERSISTENTE - sobrevive ao desligamento")
+                    } else {
+                        Registro.linha("porta 5555 fixada, mas este firmware nao guardou a persistente")
+                        Registro.linha("apos desligar 100% a reconexao pode depender de pareamento")
+                    }
                     Resultado.Ok("porta fixada")
                 }
             }

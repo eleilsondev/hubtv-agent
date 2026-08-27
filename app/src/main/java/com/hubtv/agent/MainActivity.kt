@@ -128,6 +128,7 @@ class MainActivity : AppCompatActivity() {
         Registro.linha("app iniciado - preparando identidade em segundo plano...")
         Registro.linha("fluxo: no HubTV rode 'adb tcpip 5555', depois toque CONECTAR aqui")
         Registro.linha("um dialogo 'sempre permitir' aparece - um toque e pronto, sem codigo")
+        Registro.linha("PARA SOBREVIVER AO DESLIGAMENTO 100%: depois de conectar, toque FIXAR PORTA 5555")
 
         // A criptografia (chave RSA + BouncyCastle) NUNCA na thread principal.
         lifecycleScope.launch {
