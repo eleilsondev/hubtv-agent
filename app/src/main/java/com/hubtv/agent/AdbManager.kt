@@ -3,17 +3,15 @@ package com.hubtv.agent
 import android.content.Context
 import android.os.Build
 import io.github.muntashirakon.adb.AbsAdbConnectionManager
-import org.bouncycastle.asn1.DERNull
-import org.bouncycastle.asn1.nist.NISTObjectIdentifiers
-import org.bouncycastle.asn1.pkcs.PKCSObjectIdentifiers
-import org.bouncycastle.asn1.x500.X500NameBuilder
-import org.bouncycastle.asn1.x500.style.BCStyle
-import org.bouncycastle.asn1.x509.AlgorithmIdentifier
-import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo
-import org.bouncycastle.cert.X509v3CertificateBuilder
-import org.bouncycastle.crypto.util.PrivateKeyFactory
-import org.bouncycastle.operator.bc.BcRSAContentSignerBuilder
-import java.io.ByteArrayInputStream
+import sun.security.x509.AlgorithmId
+import sun.security.x509.CertificateAlgorithmId
+import sun.security.x509.CertificateSerialNumber
+import sun.security.x509.CertificateValidity
+import sun.security.x509.CertificateVersion
+import sun.security.x509.CertificateX509Key
+import sun.security.x509.X500Name
+import sun.security.x509.X509CertImpl
+import sun.security.x509.X509CertInfo
 import java.io.File
 import java.math.BigInteger
 import java.security.KeyFactory
@@ -24,7 +22,7 @@ import java.security.SecureRandom
 import java.security.cert.CertificateFactory
 import java.security.cert.X509Certificate
 import java.security.spec.PKCS8EncodedKeySpec
-import java.util.Calendar
+import java.util.Date
 
 /**
  * A identidade do agente perante o adbd.
@@ -36,6 +34,11 @@ import java.util.Calendar
  * Esse arquivo sobrevive ao reboot. Por isso a chave e gerada UMA vez e
  * guardada no armazenamento privado do app - regerar significaria perder a
  * autorizacao e precisar de um PC outra vez.
+ *
+ * O certificado e criado com sun.security.x509 (via a lib sun-security-android),
+ * que e o caminho recomendado pela propria libadb. Tentar isso com BouncyCastle
+ * no Android quebra por classes que faltam no classpath - foi o que derrubou
+ * as versoes anteriores.
  */
 class AdbManager private constructor(context: Context) : AbsAdbConnectionManager() {
 
@@ -88,41 +91,28 @@ class AdbManager private constructor(context: Context) : AbsAdbConnectionManager
         gerador.initialize(2048, SecureRandom())
         val par: KeyPair = gerador.generateKeyPair()
 
-        val nome = X500NameBuilder(BCStyle.INSTANCE)
-            .addRDN(BCStyle.CN, "HubTV Agent")
-            .addRDN(BCStyle.O, "HubTV")
-            .build()
+        val agora = System.currentTimeMillis()
+        val inicio = Date(agora - 24L * 60 * 60 * 1000)          // ontem
+        val fim = Date(agora + 30L * 365 * 24 * 60 * 60 * 1000)  // ~30 anos
+        val dono = X500Name("CN=HubTV Agent, O=HubTV")
 
-        val inicio = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -1) }
-        // validade longa de proposito: a identidade precisa durar tanto
-        // quanto o aparelho ficar em campo
-        val fim = Calendar.getInstance().apply { add(Calendar.YEAR, 30) }
+        val info = X509CertInfo()
+        info.set(X509CertInfo.VERSION, CertificateVersion(CertificateVersion.V3))
+        info.set(X509CertInfo.SERIAL_NUMBER, CertificateSerialNumber(BigInteger.valueOf(agora)))
+        info.set(X509CertInfo.SUBJECT, dono)
+        info.set(X509CertInfo.ISSUER, dono)
+        info.set(X509CertInfo.KEY, CertificateX509Key(par.public))
+        info.set(X509CertInfo.VALIDITY, CertificateValidity(inicio, fim))
+        info.set(X509CertInfo.ALGORITHM_ID, CertificateAlgorithmId(AlgorithmId.get("SHA256withRSA")))
 
-        // Assinatura pela API de BAIXO NIVEL do BouncyCastle (builders "Bc").
-        // Os algoritmos sao fixados na mao para NAO passar pelo
-        // DefaultSignatureNameFinder - a classe que quebrava com
-        // NoClassDefFoundError (EdECObjectIdentifiers) na versao anterior.
-        val algAssinatura = AlgorithmIdentifier(
-            PKCSObjectIdentifiers.sha256WithRSAEncryption, DERNull.INSTANCE
-        )
-        val algDigest = AlgorithmIdentifier(NISTObjectIdentifiers.id_sha256)
-        val chaveParam = PrivateKeyFactory.createKey(par.private.encoded)
-        val assinador = BcRSAContentSignerBuilder(algAssinatura, algDigest).build(chaveParam)
-
-        val spki = SubjectPublicKeyInfo.getInstance(par.public.encoded)
-        val holder = X509v3CertificateBuilder(
-            nome,
-            BigInteger.valueOf(System.currentTimeMillis()),
-            inicio.time,
-            fim.time,
-            nome,
-            spki
-        ).build(assinador)
-
-        // Converte o certificado DER usando a fabrica do proprio Android,
-        // sem depender do JcaX509CertificateConverter.
-        val cert = CertificateFactory.getInstance("X.509")
-            .generateCertificate(ByteArrayInputStream(holder.encoded)) as X509Certificate
+        // Assina, le o algoritmo real de volta e reassina - idioma padrao do
+        // sun.security para que o algoritmo entre corretamente no certificado.
+        var cert = X509CertImpl(info)
+        cert.sign(par.private, "SHA256withRSA")
+        val algReal = cert.get(X509CertImpl.SIG_ALG) as AlgorithmId
+        info.set(CertificateAlgorithmId.NAME + "." + CertificateAlgorithmId.ALGORITHM, algReal)
+        cert = X509CertImpl(info)
+        cert.sign(par.private, "SHA256withRSA")
 
         arquivoChave.writeBytes(par.private.encoded)
         arquivoCert.writeBytes(cert.encoded)

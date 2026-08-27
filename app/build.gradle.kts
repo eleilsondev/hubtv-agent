@@ -52,11 +52,9 @@ dependencies {
     // ---- o coracao do agente ----
     implementation("com.github.MuntashirAkon:libadb-android:3.1.1")
     implementation("org.conscrypt:conscrypt-android:2.5.3")
-    // gera o certificado X509 auto-assinado que acompanha a chave RSA.
-    // As tres partes do BouncyCastle PRECISAM ser a mesma versao, senao
-    // classes como EdECObjectIdentifiers somem do classpath e o app crasha
-    // na geracao da identidade (NoClassDefFoundError).
-    implementation("org.bouncycastle:bcpkix-jdk15to18:1.78.1")
-    implementation("org.bouncycastle:bcprov-jdk15to18:1.78.1")
-    implementation("org.bouncycastle:bcutil-jdk15to18:1.78.1")
+    // Gera o certificado X509 auto-assinado com sun.security.x509, que o
+    // Android removeu do SDK. Este pacote reintroduz essas classes. E o
+    // caminho recomendado pela libadb - o BouncyCastle no Android quebra
+    // por classes de ASN.1 que faltam no classpath em tempo de execucao.
+    implementation("com.github.MuntashirAkon:sun-security-android:1.1")
 }

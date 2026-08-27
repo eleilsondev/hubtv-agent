@@ -7,7 +7,7 @@
     <string name="registro">REGISTRO</string>
     <string name="limpar">limpar</string>
 
-    <string name="passo_parear">1 — PAREAR (só na primeira vez: Depuração sem fio › Parear dispositivo)</string>
+    <string name="passo_parear">Fluxo normal: toque em CONECTAR. O pareamento abaixo é OPCIONAL — só serve se o modo TCP (5555) não estiver ativo.</string>
     <string name="porta">porta</string>
     <string name="codigo">código</string>
     <string name="parear">Parear</string>
