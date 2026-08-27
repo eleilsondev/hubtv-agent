@@ -28,6 +28,7 @@ class AgentService : Service() {
 
     private val escopo = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var laco: Job? = null
+    private var lacoCheckin: Job? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -40,6 +41,9 @@ class AgentService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (laco?.isActive != true) {
             laco = escopo.launch { manterConexao() }
+        }
+        if (lacoCheckin?.isActive != true) {
+            lacoCheckin = escopo.launch { manterCheckin() }
         }
         return START_STICKY
     }
@@ -93,6 +97,25 @@ class AgentService : Service() {
         }
     }
 
+    /**
+     * O laco do check-in (Etapa 2): manda um retrato ao painel de tempos em
+     * tempos. Independe da conexao ADB - so precisa de rede - por isso corre
+     * num laco proprio. Enquanto Config.BASE_URL for o placeholder, ele so
+     * dorme, sem barulho.
+     */
+    private suspend fun manterCheckin() {
+        delay(ESPERA_BOOT_MS)
+        while (true) {
+            if (Config.configurado()) {
+                when (val r = CheckIn.pulso(this)) {
+                    is CheckIn.Resultado.Ok -> { /* comandos: consumidos na Etapa 3 */ }
+                    is CheckIn.Resultado.Falha -> Registro.linha("check-in: ${r.motivo}")
+                }
+            }
+            delay(INTERVALO_CHECKIN_MS)
+        }
+    }
+
     private fun criarCanal() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val canal = NotificationChannel(
@@ -128,6 +151,7 @@ class AgentService : Service() {
         private const val ESPERA_BASE_MS = 10_000L
         private const val ESPERA_MAXIMA_MS = 120_000L
         private const val INTERVALO_VERIFICACAO_MS = 60_000L
+        private const val INTERVALO_CHECKIN_MS = 5 * 60_000L   // 5 min (teste); producao ~15
 
         fun iniciar(context: Context) {
             val i = Intent(context, AgentService::class.java)

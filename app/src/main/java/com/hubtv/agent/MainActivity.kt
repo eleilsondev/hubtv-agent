@@ -120,6 +120,23 @@ class MainActivity : AppCompatActivity() {
             }
         } }
 
+        v.btnCheckin.setOnClickListener { comProtecao {
+            lifecycleScope.launch {
+                ocupado(true)
+                if (!Config.configurado()) {
+                    Registro.linha("configure Config.BASE_URL (VPS) antes de testar o check-in")
+                } else {
+                    when (val r = CheckIn.pulso(this@MainActivity)) {
+                        is CheckIn.Resultado.Ok ->
+                            Registro.linha("check-in enviado - painel respondeu ok")
+                        is CheckIn.Resultado.Falha ->
+                            Registro.linha("check-in falhou: ${r.motivo}")
+                    }
+                }
+                ocupado(false)
+            }
+        } }
+
         v.btnLimpar.setOnClickListener {
             Registro.limpar()
             v.registro.text = ""

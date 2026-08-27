@@ -16,4 +16,5 @@
     <string name="conectar">Conectar</string>
     <string name="testar">Testar poderes</string>
     <string name="fixar_porta">Fixar porta 5555</string>
+    <string name="checkin">Check-in agora</string>
 </resources>
