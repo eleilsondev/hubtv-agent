@@ -120,11 +120,11 @@ class MainActivity : AppCompatActivity() {
 
         val codigoSalvo = Config.codigoInscricao(this)
         if (!codigoSalvo.isNullOrBlank()) {
-            v.campoCodigo.setText(codigoSalvo)
+            v.campoCodigoInscricao.setText(codigoSalvo)
         }
 
         v.btnInscrever.setOnClickListener { comProtecao {
-            val codigo = v.campoCodigo.text.toString().trim()
+            val codigo = v.campoCodigoInscricao.text.toString().trim()
             if (codigo.length < 6) {
                 Registro.linha("digite o codigo de 6 digitos gerado no painel")
                 return@comProtecao
@@ -241,7 +241,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun atualizarEstadoInscricao() {
         val inscrito = Config.inscrito(this)
-        v.campoCodigo.isEnabled = !inscrito
+        v.campoCodigoInscricao.isEnabled = !inscrito
         v.btnInscrever.isEnabled = !inscrito
         v.btnInscrever.text = if (inscrito) "Inscrito" else "Inscrever"
         v.btnCheckin.isEnabled = inscrito
