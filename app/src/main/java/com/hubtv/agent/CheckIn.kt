@@ -72,6 +72,17 @@ object CheckIn {
 
         val comandos = resp.optJSONArray("comandos") ?: JSONArray()
         Registro.linha("check-in ok - ${comandos.length()} comando(s) na fila")
+
+        val bloqueado = resp.optBoolean("bloqueado", false)
+        context.getSharedPreferences("hubtv_agente", Context.MODE_PRIVATE)
+            .edit().putBoolean("bloqueado", bloqueado).apply()
+
+        val launcher = resp.optJSONObject("launcher")
+        if (launcher != null) {
+            LauncherActivity.salvarConfig(context, launcher)
+            Registro.linha("config do launcher atualizada")
+        }
+
         return Resultado.Ok(comandos)
     }
 

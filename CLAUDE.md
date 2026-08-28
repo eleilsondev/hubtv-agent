@@ -87,8 +87,12 @@ sozinho após o boot, sem PC**. É a "Etapa 1" que prova a arquitetura de frota.
 - `.../AgentService.kt` — serviço foreground; laço de reconexão pós-boot.
 - `.../BootReceiver.kt` — starta o serviço no boot.
 - `.../AgentApp.kt` — handler de crash em arquivo.
-- `.../MainActivity.kt` — UI de teste (botões: Ligar depuração, Parear,
-  Conectar, Testar poderes, Fixar porta 5555, Limpar). Registro na tela.
+- `.../LauncherActivity.kt` — **tela inicial (HOME)** da TV. Mostra apps,
+  categorias, banners e atalhos rapidos. Config vem do painel via check-in
+  e fica em SharedPreferences `hubtv_launcher`. Tela de bloqueio integrada.
+  Tecla MENU abre a MainActivity (painel de controle do agente).
+- `.../MainActivity.kt` — UI de controle do agente (botões: Ligar depuração,
+  Parear, Conectar, Testar poderes, Fixar porta 5555, Limpar). Registro na tela.
 - `.../Registro.kt` — log em memória observável, exibido na UI.
 - `app/build.gradle.kts` — deps: libadb-android 3.1.1, conscrypt-android 2.5.3.
   **Sem BouncyCastle, sem sun-security.** minSdk 21, targetSdk 34,
@@ -107,16 +111,14 @@ sobreviver ao desligamento total.
 
 ## Onde paramos / próximos passos
 
-- **AGORA:** teste de reconexão pós **desligamento 100%** com o `b7`. Fluxo:
-  conectar (TCP 5555) → tocar "Fixar porta 5555" (checar se a persistente
-  pegou) → desligar da tomada → após o boot esperar ~1 min → ler o Registro
-  procurando "de pe outra vez, sem PC e sem dialogo".
-- Redesenhar a UI de conexão removendo os campos de pareamento (porta+código)
-  quando a identidade já funciona.
-- Adicionar um botão/etapa `adb tcpip 5555` na ferramenta HubTV (Fase A/B).
-- **Etapa 2 (não iniciada):** check-in periódico do agente → backend + painel
-  **Laravel** de frota (é aqui que entra o XAMPP: Apache + MySQL + PHP local).
-- **Etapa 3 (não iniciada):** fila de comandos para ações privilegiadas remotas.
+- **Etapa 2 (CONCLUÍDA):** check-in periódico + painel Laravel com dashboard,
+  gestão de dispositivos, usuários, comandos remotos.
+- **Etapa 3 (CONCLUÍDA):** fila de comandos (shell, install, reboot, bloquear,
+  desbloquear, atualizar_launcher) com report de resultado pelo APK.
+- **Launcher (EM ANDAMENTO):** LauncherActivity como HOME da TV Box. Config
+  gerenciada pelo painel web (perfis, categorias, apps, banners). Entregue
+  ao APK pelo check-in. `Config.BASE_URL` atualizado para `https://hub.tv.br`.
+- Testar build e instalar no aparelho para validar launcher.
 
 ## Convenções
 

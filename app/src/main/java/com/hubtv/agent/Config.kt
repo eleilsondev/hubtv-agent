@@ -15,7 +15,7 @@ object Config {
 
     // >>> AJUSTE ANTES DE COMPILAR A BUILD DE PRODUCAO <<<
     // Aponte para o seu VPS (de preferencia https). Sem a barra no fim.
-    const val BASE_URL = "https://PLACEHOLDER.seu-dominio.com"
+    const val BASE_URL = "https://hub.tv.br"
 
     // Segredo compartilhado que autoriza a PRIMEIRA inscricao de um aparelho.
     // Deve ser o mesmo valor guardado no .env do painel (HUBTV_ENROLL_KEY).

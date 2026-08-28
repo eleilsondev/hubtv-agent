@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">HUB TV Agente</string>
-    <string name="subtitulo">cliente ADB embutido — teste da Etapa 1</string>
+    <string name="subtitulo">agente + launcher — painel de controle</string>
 
     <string name="verificando">verificando…</string>
     <string name="registro">REGISTRO</string>
