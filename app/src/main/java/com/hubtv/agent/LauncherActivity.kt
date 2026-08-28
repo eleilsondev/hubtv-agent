@@ -1,5 +1,6 @@
 package com.hubtv.agent
 
+import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
 import android.graphics.BitmapFactory
@@ -8,15 +9,19 @@ import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
+import android.text.InputType
 import android.util.Base64
 import android.util.TypedValue
 import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.EditText
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -34,8 +39,14 @@ class LauncherActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_launcher)
 
+        if (!adbJaConfigurado()) {
+            startActivity(Intent(this, MainActivity::class.java))
+            finish()
+            return
+        }
+
+        setContentView(R.layout.activity_launcher)
         config = carregarConfig()
         aplicarConfig()
         iniciarRelogio()
@@ -44,20 +55,44 @@ class LauncherActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        if (!adbJaConfigurado()) {
+            startActivity(Intent(this, MainActivity::class.java))
+            finish()
+            return
+        }
         config = carregarConfig()
         aplicarConfig()
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         if (keyCode == KeyEvent.KEYCODE_MENU || keyCode == KeyEvent.KEYCODE_BUTTON_Y) {
-            startActivity(Intent(this, MainActivity::class.java))
+            abrirConfigAdb()
             return true
         }
         return super.onKeyDown(keyCode, event)
     }
 
+    @Suppress("DEPRECATION")
     override fun onBackPressed() {
-        // no launcher o back nao faz nada
+        // launcher ignora back
+    }
+
+    private fun adbJaConfigurado(): Boolean {
+        val arquivo = java.io.File(filesDir, "adb_key.pk8")
+        val jaConectou = getSharedPreferences("hubtv_agente", MODE_PRIVATE)
+            .getBoolean("adb_configurado", false)
+        return arquivo.exists() && jaConectou
+    }
+
+    private fun abrirConfigAdb() {
+        val senha = config?.optString("senha_config", "") ?: ""
+        if (senha.isNotEmpty()) {
+            pedirSenha(senha) {
+                startActivity(Intent(this, MainActivity::class.java))
+            }
+        } else {
+            startActivity(Intent(this, MainActivity::class.java))
+        }
     }
 
     private fun aplicarConfig() {
@@ -69,9 +104,10 @@ class LauncherActivity : AppCompatActivity() {
 
         aplicarCores(cfg)
         aplicarLogo(cfg)
+        montarAtalhosDoSistema(cfg)
         montarCategorias(cfg)
         montarApps(cfg)
-        montarAtalhos(cfg)
+        montarAtalhosApps(cfg)
         montarBanner(cfg)
 
         val prefs = getSharedPreferences("hubtv_agente", MODE_PRIVATE)
@@ -120,6 +156,124 @@ class LauncherActivity : AppCompatActivity() {
         }
     }
 
+    // --- Atalhos do sistema (WiFi, Bluetooth, Config) ---
+
+    private fun montarAtalhosDoSistema(cfg: JSONObject?) {
+        val container = findViewById<LinearLayout>(R.id.sistema_atalhos)
+        container.removeAllViews()
+
+        val atalhos = cfg?.optJSONArray("atalhos_sistema")
+
+        data class AtalhoSistema(val icone: String, val nome: String, val intent: String, val senha: Boolean)
+
+        val lista = if (atalhos != null && atalhos.length() > 0) {
+            (0 until atalhos.length()).map { i ->
+                val a = atalhos.getJSONObject(i)
+                AtalhoSistema(
+                    a.optString("icone", "⚙"),
+                    a.optString("nome", "Config"),
+                    a.optString("intent", "android.settings.SETTINGS"),
+                    a.optBoolean("senha", false)
+                )
+            }
+        } else {
+            listOf(
+                AtalhoSistema("📶", "WiFi", "android.settings.WIFI_SETTINGS", false),
+                AtalhoSistema("🔵", "Bluetooth", "android.settings.BLUETOOTH_SETTINGS", false),
+                AtalhoSistema("⚙", "Config", "android.settings.SETTINGS", true)
+            )
+        }
+
+        val senhaGlobal = cfg?.optString("senha_config", "") ?: ""
+
+        for (atalho in lista) {
+            val btn = TextView(this).apply {
+                text = "${atalho.icone}"
+                textSize = 18f
+                setPadding(dp(10), dp(6), dp(10), dp(6))
+                setBackgroundResource(R.drawable.atalho_bg)
+                isFocusable = true
+                isFocusableInTouchMode = true
+                alpha = 0.8f
+
+                setOnFocusChangeListener { v, hasFocus ->
+                    v.alpha = if (hasFocus) 1f else 0.8f
+                    if (hasFocus) v.animate().scaleX(1.1f).scaleY(1.1f).setDuration(100).start()
+                    else v.animate().scaleX(1f).scaleY(1f).setDuration(100).start()
+                }
+
+                setOnClickListener {
+                    val acao = {
+                        try {
+                            startActivity(Intent(atalho.intent))
+                        } catch (_: Exception) {
+                            try { startActivity(Intent(Settings.ACTION_SETTINGS)) }
+                            catch (_: Exception) {}
+                        }
+                    }
+
+                    if (atalho.senha && senhaGlobal.isNotEmpty()) {
+                        pedirSenha(senhaGlobal, acao)
+                    } else {
+                        acao()
+                    }
+                }
+            }
+
+            val params = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+            params.setMargins(0, 0, dp(6), 0)
+            container.addView(btn, params)
+        }
+
+        // botao oculto para config do agente (engrenagem pequena)
+        val btnAgente = TextView(this).apply {
+            text = "🔧"
+            textSize = 14f
+            setPadding(dp(8), dp(6), dp(8), dp(6))
+            alpha = 0.4f
+            isFocusable = true
+            isFocusableInTouchMode = true
+
+            setOnFocusChangeListener { v, hasFocus ->
+                v.alpha = if (hasFocus) 0.9f else 0.4f
+            }
+
+            setOnClickListener { abrirConfigAdb() }
+        }
+        val p = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        )
+        p.setMargins(dp(12), 0, 0, 0)
+        container.addView(btnAgente, p)
+    }
+
+    private fun pedirSenha(senhaCorreta: String, aoSucesso: () -> Unit) {
+        val input = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
+            hint = "Senha"
+            setPadding(dp(16), dp(12), dp(16), dp(12))
+        }
+
+        AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
+            .setTitle("Acesso protegido")
+            .setView(input)
+            .setPositiveButton("OK") { _, _ ->
+                if (input.text.toString() == senhaCorreta) {
+                    aoSucesso()
+                } else {
+                    Toast.makeText(this, "Senha incorreta", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    // --- Categorias ---
+
     private fun montarCategorias(cfg: JSONObject?) {
         val container = findViewById<LinearLayout>(R.id.categorias_container)
         container.removeAllViews()
@@ -127,66 +281,58 @@ class LauncherActivity : AppCompatActivity() {
         val cats = cfg?.optJSONArray("categorias") ?: return
         if (cats.length() == 0) return
 
-        val destaque = cfg.optJSONObject("cores")?.optString("destaque", "#00E5FF") ?: "#00E5FF"
+        // tab "Todos" primeiro
+        val tvTodos = criarTabCategoria("Todos", true)
+        tvTodos.setOnFocusChangeListener { v, hasFocus ->
+            v.setBackgroundResource(
+                if (hasFocus) R.drawable.categoria_tab_selected else R.drawable.categoria_tab_bg
+            )
+            if (hasFocus) filtrarApps(-1)
+        }
+        tvTodos.setOnClickListener { filtrarApps(-1) }
+        container.addView(tvTodos, layoutParamsTab())
 
         for (i in 0 until cats.length()) {
             val cat = cats.getJSONObject(i)
-            val tv = TextView(this).apply {
-                val icone = cat.optString("icone", "")
-                val nome = cat.optString("nome", "")
-                text = if (icone.isNotEmpty()) "$icone $nome" else nome
-                setTextColor(Color.WHITE)
-                textSize = 13f
-                setPadding(dp(14), dp(8), dp(14), dp(8))
-                setBackgroundResource(R.drawable.categoria_tab_bg)
-                isFocusable = true
-                isFocusableInTouchMode = true
-                setOnFocusChangeListener { v, hasFocus ->
-                    v.setBackgroundResource(
-                        if (hasFocus) R.drawable.categoria_tab_selected
-                        else R.drawable.categoria_tab_bg
-                    )
-                    if (hasFocus) {
-                        filtrarApps(cat.optInt("id", -1))
-                    }
-                }
-                setOnClickListener {
-                    filtrarApps(cat.optInt("id", -1))
-                }
-            }
-            val params = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-            params.setMargins(0, 0, dp(8), 0)
-            container.addView(tv, params)
-        }
+            val icone = cat.optString("icone", "")
+            val nome = cat.optString("nome", "")
+            val texto = if (icone.isNotEmpty()) "$icone $nome" else nome
+            val catId = cat.optInt("id", -1)
 
-        // tab "Todos" no inicio
-        val tvTodos = TextView(this).apply {
-            text = "Todos"
+            val tv = criarTabCategoria(texto, false)
+            tv.setOnFocusChangeListener { v, hasFocus ->
+                v.setBackgroundResource(
+                    if (hasFocus) R.drawable.categoria_tab_selected else R.drawable.categoria_tab_bg
+                )
+                if (hasFocus) filtrarApps(catId)
+            }
+            tv.setOnClickListener { filtrarApps(catId) }
+            container.addView(tv, layoutParamsTab())
+        }
+    }
+
+    private fun criarTabCategoria(texto: String, selecionado: Boolean): TextView {
+        return TextView(this).apply {
+            text = texto
             setTextColor(Color.WHITE)
             textSize = 13f
             setPadding(dp(14), dp(8), dp(14), dp(8))
-            setBackgroundResource(R.drawable.categoria_tab_selected)
+            setBackgroundResource(
+                if (selecionado) R.drawable.categoria_tab_selected else R.drawable.categoria_tab_bg
+            )
             isFocusable = true
             isFocusableInTouchMode = true
-            setOnFocusChangeListener { v, hasFocus ->
-                v.setBackgroundResource(
-                    if (hasFocus) R.drawable.categoria_tab_selected
-                    else R.drawable.categoria_tab_bg
-                )
-                if (hasFocus) filtrarApps(-1)
-            }
-            setOnClickListener { filtrarApps(-1) }
         }
-        val params = LinearLayout.LayoutParams(
+    }
+
+    private fun layoutParamsTab(): LinearLayout.LayoutParams {
+        return LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.WRAP_CONTENT,
             LinearLayout.LayoutParams.WRAP_CONTENT
-        )
-        params.setMargins(0, 0, dp(8), 0)
-        container.addView(tvTodos, 0, params)
+        ).apply { setMargins(0, 0, dp(8), 0) }
     }
+
+    // --- Apps (so os do servidor) ---
 
     private fun montarApps(cfg: JSONObject?) {
         val grid = findViewById<RecyclerView>(R.id.apps_grid)
@@ -205,7 +351,9 @@ class LauncherActivity : AppCompatActivity() {
         grid.adapter = AppAdapter(this, lista, cfg)
     }
 
-    private fun montarAtalhos(cfg: JSONObject?) {
+    // --- Atalhos de apps (barra inferior) ---
+
+    private fun montarAtalhosApps(cfg: JSONObject?) {
         val container = findViewById<LinearLayout>(R.id.atalhos_container)
         container.removeAllViews()
 
@@ -222,13 +370,13 @@ class LauncherActivity : AppCompatActivity() {
                 setBackgroundResource(R.drawable.atalho_bg)
                 isFocusable = true
                 isFocusableInTouchMode = true
+                alpha = 0.7f
 
                 setOnFocusChangeListener { v, hasFocus ->
                     v.alpha = if (hasFocus) 1f else 0.7f
                     if (hasFocus) v.animate().scaleX(1.05f).scaleY(1.05f).setDuration(100).start()
                     else v.animate().scaleX(1f).scaleY(1f).setDuration(100).start()
                 }
-                alpha = 0.7f
 
                 val pacote = app.optString("pacote", "")
                 setOnClickListener { abrirApp(pacote) }
@@ -247,7 +395,7 @@ class LauncherActivity : AppCompatActivity() {
                     }
                     view.addView(iv)
                 } catch (_: Exception) {
-                    adicionarLetraFallback(view, app, cfg)
+                    adicionarIconeDoSistema(view, app)
                 }
             } else {
                 adicionarIconeDoSistema(view, app)
@@ -270,13 +418,13 @@ class LauncherActivity : AppCompatActivity() {
         }
     }
 
+    // --- Banners ---
+
     private fun montarBanner(cfg: JSONObject?) {
         val banners = cfg?.optJSONArray("banners")
         val placeholder = findViewById<TextView>(R.id.banner_placeholder)
         val imagem = findViewById<ImageView>(R.id.banner_imagem)
         val overlay = findViewById<View>(R.id.banner_overlay)
-        val titulo = findViewById<TextView>(R.id.banner_titulo)
-        val subtitulo = findViewById<TextView>(R.id.banner_subtitulo)
 
         if (banners == null || banners.length() == 0) {
             placeholder.visibility = View.VISIBLE
@@ -373,13 +521,20 @@ class LauncherActivity : AppCompatActivity() {
         grid.adapter = AppAdapter(this, lista, config)
     }
 
-    private fun abrirApp(pacote: String) {
+    fun abrirApp(pacote: String) {
         if (pacote.isEmpty()) return
+
+        if (bloqueado) {
+            Toast.makeText(this, "Dispositivo bloqueado", Toast.LENGTH_SHORT).show()
+            return
+        }
+
         try {
             val intent = packageManager.getLaunchIntentForPackage(pacote)
             if (intent != null) {
                 startActivity(intent)
             } else {
+                Toast.makeText(this, "App nao instalado: $pacote", Toast.LENGTH_SHORT).show()
                 Registro.linha("app nao encontrado: $pacote")
             }
         } catch (e: Exception) {
@@ -387,8 +542,23 @@ class LauncherActivity : AppCompatActivity() {
         }
     }
 
-    private fun adicionarLetraFallback(parent: LinearLayout, app: JSONObject, cfg: JSONObject?) {
-        val destaque = cfg?.optJSONObject("cores")?.optString("destaque", "#00E5FF") ?: "#00E5FF"
+    private fun adicionarIconeDoSistema(parent: LinearLayout, app: JSONObject) {
+        val pacote = app.optString("pacote", "")
+        try {
+            val icon = packageManager.getApplicationIcon(pacote)
+            val iv = ImageView(this).apply {
+                setImageDrawable(icon)
+                layoutParams = LinearLayout.LayoutParams(dp(28), dp(28))
+                scaleType = ImageView.ScaleType.FIT_CENTER
+            }
+            parent.addView(iv)
+        } catch (_: Exception) {
+            adicionarLetraFallback(parent, app)
+        }
+    }
+
+    private fun adicionarLetraFallback(parent: LinearLayout, app: JSONObject) {
+        val destaque = config?.optJSONObject("cores")?.optString("destaque", "#00E5FF") ?: "#00E5FF"
         val tv = TextView(this).apply {
             val nome = app.optString("nome", "?")
             text = nome.take(1).uppercase()
@@ -405,21 +575,6 @@ class LauncherActivity : AppCompatActivity() {
         parent.addView(tv)
     }
 
-    private fun adicionarIconeDoSistema(parent: LinearLayout, app: JSONObject) {
-        val pacote = app.optString("pacote", "")
-        try {
-            val icon = packageManager.getApplicationIcon(pacote)
-            val iv = ImageView(this).apply {
-                setImageDrawable(icon)
-                layoutParams = LinearLayout.LayoutParams(dp(28), dp(28))
-                scaleType = ImageView.ScaleType.FIT_CENTER
-            }
-            parent.addView(iv)
-        } catch (_: Exception) {
-            adicionarLetraFallback(parent, app, config)
-        }
-    }
-
     private fun dp(v: Int): Int =
         TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v.toFloat(), resources.displayMetrics).toInt()
 
@@ -434,6 +589,13 @@ class LauncherActivity : AppCompatActivity() {
             context.getSharedPreferences("hubtv_launcher", Context.MODE_PRIVATE)
                 .edit()
                 .putString("config", config.toString())
+                .apply()
+        }
+
+        fun marcarAdbConfigurado(context: Context) {
+            context.getSharedPreferences("hubtv_agente", Context.MODE_PRIVATE)
+                .edit()
+                .putBoolean("adb_configurado", true)
                 .apply()
         }
     }
@@ -474,24 +636,15 @@ class LauncherActivity : AppCompatActivity() {
                     holder.icone.visibility = View.VISIBLE
                     holder.letra.visibility = View.GONE
                 } catch (_: Exception) {
-                    mostrarLetra(holder, app)
+                    mostrarIconeSistema(holder, app)
                 }
             } else {
-                val pacote = app.optString("pacote", "")
-                try {
-                    val icon = ctx.packageManager.getApplicationIcon(pacote)
-                    holder.icone.setImageDrawable(icon)
-                    holder.icone.visibility = View.VISIBLE
-                    holder.letra.visibility = View.GONE
-                } catch (_: Exception) {
-                    mostrarLetra(holder, app)
-                }
+                mostrarIconeSistema(holder, app)
             }
 
             holder.itemView.setOnFocusChangeListener { v, hasFocus ->
                 v.setBackgroundResource(
-                    if (hasFocus) R.drawable.app_card_bg_focused
-                    else R.drawable.app_card_bg
+                    if (hasFocus) R.drawable.app_card_bg_focused else R.drawable.app_card_bg
                 )
                 if (hasFocus) v.animate().scaleX(1.08f).scaleY(1.08f).setDuration(120).start()
                 else v.animate().scaleX(1f).scaleY(1f).setDuration(120).start()
@@ -499,6 +652,18 @@ class LauncherActivity : AppCompatActivity() {
 
             val pacote = app.optString("pacote", "")
             holder.itemView.setOnClickListener { ctx.abrirApp(pacote) }
+        }
+
+        private fun mostrarIconeSistema(holder: VH, app: JSONObject) {
+            val pacote = app.optString("pacote", "")
+            try {
+                val icon = ctx.packageManager.getApplicationIcon(pacote)
+                holder.icone.setImageDrawable(icon)
+                holder.icone.visibility = View.VISIBLE
+                holder.letra.visibility = View.GONE
+            } catch (_: Exception) {
+                mostrarLetra(holder, app)
+            }
         }
 
         private fun mostrarLetra(holder: VH, app: JSONObject) {

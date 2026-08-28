@@ -115,9 +115,13 @@ sobreviver ao desligamento total.
   gestão de dispositivos, usuários, comandos remotos.
 - **Etapa 3 (CONCLUÍDA):** fila de comandos (shell, install, reboot, bloquear,
   desbloquear, atualizar_launcher) com report de resultado pelo APK.
-- **Launcher (EM ANDAMENTO):** LauncherActivity como HOME da TV Box. Config
-  gerenciada pelo painel web (perfis, categorias, apps, banners). Entregue
-  ao APK pelo check-in. `Config.BASE_URL` atualizado para `https://hub.tv.br`.
+- **Launcher (EM ANDAMENTO):** LauncherActivity como HOME da TV Box. Fluxo em
+  duas fases: primeiro configura ADB (MainActivity), depois ativa modo launcher
+  (HOME). Config gerenciada pelo painel web (perfis, categorias, apps, banners,
+  atalhos do sistema com senha, senha de config). Entregue ao APK pelo check-in.
+  `Config.BASE_URL` atualizado para `https://hub.tv.br`. Launcher so mostra
+  apps do servidor, bloqueia abertura quando dispositivo vencido/bloqueado.
+  Atalhos do sistema (WiFi, Bluetooth, Config) no topo com protecao por senha.
 - Testar build e instalar no aparelho para validar launcher.
 
 ## Convenções

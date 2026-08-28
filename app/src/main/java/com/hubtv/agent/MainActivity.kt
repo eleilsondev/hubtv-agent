@@ -1,9 +1,11 @@
 package com.hubtv.agent
 
+import android.content.Intent
 import android.os.Bundle
 import android.view.View
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.hubtv.agent.databinding.ActivityMainBinding
@@ -11,14 +13,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/**
- * Tela de teste da Etapa 1.
- *
- * Regra de ouro daqui: NADA pesado ou arriscado roda na thread principal
- * dentro do onCreate. A geracao da chave RSA, a conexao, o servico - tudo
- * vai para corrotina com try/catch. Um erro vira texto na tela, nunca uma
- * "tela preta que fecha".
- */
 class MainActivity : AppCompatActivity() {
 
     private lateinit var v: ActivityMainBinding
@@ -26,8 +20,6 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Se a UI em si falhar ao inflar, cai num painel de texto simples
-        // mostrando o erro - melhor isso do que uma tela preta.
         try {
             v = ActivityMainBinding.inflate(layoutInflater)
             setContentView(v.root)
@@ -48,7 +40,6 @@ class MainActivity : AppCompatActivity() {
         v.registro.text = Registro.tudo().joinToString("\n")
         Registro.observar { runOnUiThread { acrescentar(it) } }
 
-        // Mostra o crash da execucao anterior, se houve.
         AgentApp.lerUltimoErro(this)?.let { erro ->
             Registro.linha("=== ERRO DA EXECUCAO ANTERIOR ===")
             erro.lines().take(12).forEach { Registro.linha("  $it") }
@@ -77,6 +68,7 @@ class MainActivity : AppCompatActivity() {
                         is Adb.Resultado.Ok -> {
                             Registro.linha("agora conecte - a autorizacao ja vale")
                             Adb.conectar(this@MainActivity)
+                            marcarAdbConfigurado()
                         }
                         is Adb.Resultado.Falha -> Registro.linha(r.motivo)
                     }
@@ -90,7 +82,10 @@ class MainActivity : AppCompatActivity() {
             lifecycleScope.launch {
                 ocupado(true)
                 when (val r = Adb.conectar(this@MainActivity)) {
-                    is Adb.Resultado.Ok -> Registro.linha("conexao estabelecida")
+                    is Adb.Resultado.Ok -> {
+                        Registro.linha("conexao estabelecida")
+                        marcarAdbConfigurado()
+                    }
                     is Adb.Resultado.Falha -> {
                         Registro.linha(r.motivo)
                         Registro.linha("se for a primeira vez, pareie antes (porta + codigo)")
@@ -113,7 +108,10 @@ class MainActivity : AppCompatActivity() {
             lifecycleScope.launch {
                 ocupado(true)
                 when (val r = Adb.fixarPorta5555(this@MainActivity)) {
-                    is Adb.Resultado.Ok -> Registro.linha("porta fixa: reconexao apos boot fica direta")
+                    is Adb.Resultado.Ok -> {
+                        Registro.linha("porta fixa: reconexao apos boot fica direta")
+                        marcarAdbConfigurado()
+                    }
                     is Adb.Resultado.Falha -> Registro.linha(r.motivo)
                 }
                 ocupado(false)
@@ -137,17 +135,32 @@ class MainActivity : AppCompatActivity() {
             }
         } }
 
+        v.btnLauncher.setOnClickListener { comProtecao {
+            if (!adbConfigurado()) {
+                Toast.makeText(this, "Configure o ADB primeiro (conecte e fixe a porta)", Toast.LENGTH_LONG).show()
+                Registro.linha("ADB ainda nao configurado - conecte e fixe a porta antes")
+            } else {
+                marcarAdbConfigurado()
+                val intent = Intent(this, LauncherActivity::class.java)
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                startActivity(intent)
+                finish()
+            }
+        } }
+
         v.btnLimpar.setOnClickListener {
             Registro.limpar()
             v.registro.text = ""
         }
 
+        atualizarBotaoLauncher()
+
         Registro.linha("app iniciado - preparando identidade em segundo plano...")
         Registro.linha("fluxo: no HubTV rode 'adb tcpip 5555', depois toque CONECTAR aqui")
         Registro.linha("um dialogo 'sempre permitir' aparece - um toque e pronto, sem codigo")
         Registro.linha("PARA SOBREVIVER AO DESLIGAMENTO 100%: depois de conectar, toque FIXAR PORTA 5555")
+        Registro.linha("depois disso, toque ENTRAR NO MODO LAUNCHER para ativar a tela inicial")
 
-        // A criptografia (chave RSA + BouncyCastle) NUNCA na thread principal.
         lifecycleScope.launch {
             val nova = try {
                 withContext(Dispatchers.IO) { AdbManager.get(this@MainActivity).identidadeNova }
@@ -163,7 +176,6 @@ class MainActivity : AppCompatActivity() {
                 null  -> Registro.linha("identidade indisponivel - veja o erro acima")
             }
             atualizarEstado()
-            // servico so depois da identidade pronta, e protegido
             try { AgentService.iniciar(this@MainActivity) }
             catch (e: Throwable) { Registro.linha("aviso: servico nao iniciou: ${e.message}") }
         }
@@ -171,7 +183,10 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        comProtecao { atualizarEstado() }
+        comProtecao {
+            atualizarEstado()
+            atualizarBotaoLauncher()
+        }
     }
 
     override fun onDestroy() {
@@ -180,6 +195,24 @@ class MainActivity : AppCompatActivity() {
     }
 
     // ---------------------------------------------------------------
+
+    private fun adbConfigurado(): Boolean {
+        val arquivo = java.io.File(filesDir, "adb_key.pk8")
+        val jaConectou = getSharedPreferences("hubtv_agente", MODE_PRIVATE)
+            .getBoolean("adb_configurado", false)
+        return arquivo.exists() && jaConectou
+    }
+
+    private fun marcarAdbConfigurado() {
+        LauncherActivity.marcarAdbConfigurado(this)
+        atualizarBotaoLauncher()
+    }
+
+    private fun atualizarBotaoLauncher() {
+        val pronto = adbConfigurado()
+        v.btnLauncher.isEnabled = true
+        v.btnLauncher.text = if (pronto) "Entrar no modo Launcher" else "Entrar no modo Launcher (configure ADB primeiro)"
+    }
 
     private suspend fun testarPoderes() {
         Registro.linha("--- teste de poderes de shell ---")
@@ -203,7 +236,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun atualizarEstado() {
-        // ambos consultam o AdbManager -> podem tocar cripto -> em corrotina
         lifecycleScope.launch {
             val depuracao = try {
                 withContext(Dispatchers.IO) { Adb.depuracaoSemFioLigada(this@MainActivity) }
@@ -234,7 +266,6 @@ class MainActivity : AppCompatActivity() {
         v.rolagem.post { v.rolagem.fullScroll(View.FOCUS_DOWN) }
     }
 
-    /** Envolve um clique para que nenhuma falha derrube o app. */
     private inline fun comProtecao(bloco: () -> Unit) {
         try { bloco() } catch (e: Throwable) {
             Registro.linha("ERRO: ${e.message}")
@@ -242,7 +273,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /** Ultimo recurso: um TextView rolavel com o erro, sem depender do layout. */
     private fun mostrarErroSimples(texto: String) {
         val tv = TextView(this).apply {
             text = texto

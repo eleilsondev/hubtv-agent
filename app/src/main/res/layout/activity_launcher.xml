@@ -16,7 +16,7 @@
         android:orientation="vertical"
         android:padding="24dp">
 
-        <!-- TOPBAR: logo + nome + relogio -->
+        <!-- TOPBAR: logo + nome + atalhos sistema + relogio -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -33,8 +33,7 @@
 
             <TextView
                 android:id="@+id/nome_launcher"
-                android:layout_width="0dp"
-                android:layout_weight="1"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="HUB TV"
                 android:textColor="#FFFFFF"
@@ -45,6 +44,17 @@
                 android:shadowDx="0"
                 android:shadowDy="2"
                 android:shadowRadius="4" />
+
+            <!-- atalhos do sistema (WiFi, Bluetooth, Config) -->
+            <LinearLayout
+                android:id="@+id/sistema_atalhos"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginStart="16dp"
+                android:layout_marginEnd="16dp" />
 
             <!-- status conexao -->
             <View
@@ -171,7 +181,7 @@
                 android:padding="4dp" />
         </LinearLayout>
 
-        <!-- BARRA INFERIOR: atalhos rapidos -->
+        <!-- BARRA INFERIOR: atalhos rapidos de apps -->
         <LinearLayout
             android:id="@+id/atalhos_container"
             android:layout_width="match_parent"
