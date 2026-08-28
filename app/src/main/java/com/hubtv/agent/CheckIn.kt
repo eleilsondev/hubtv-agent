@@ -48,11 +48,22 @@ object CheckIn {
     // ------------------------------------------------------------------
 
     private fun inscrever(context: Context): Resultado {
+        val codigo = Config.codigoInscricao(context)
+        if (codigo.isNullOrBlank()) {
+            return Resultado.Falha("codigo de inscricao nao configurado")
+        }
+
+        val corpo = retrato(context)
+        corpo.put("codigo", codigo)
+
         val resp = postar(
             "${Config.BASE_URL}/api/dispositivos/registrar",
-            retrato(context),
-            mapOf("X-Enroll-Key" to Config.CHAVE_INSCRICAO)
+            corpo,
+            emptyMap()
         ) ?: return Resultado.Falha("sem resposta na inscricao")
+
+        val erro = resp.optString("erro", "")
+        if (erro.isNotBlank()) return Resultado.Falha(erro)
 
         val token = resp.optString("token", "")
         if (token.isBlank()) return Resultado.Falha("o painel nao devolveu token")

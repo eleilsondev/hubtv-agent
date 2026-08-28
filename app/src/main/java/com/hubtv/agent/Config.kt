@@ -23,6 +23,7 @@ object Config {
 
     private const val PREFS = "hubtv_agente"
     private const val K_TOKEN = "token"
+    private const val K_CODIGO = "codigo_inscricao"
 
     /** Identificador estavel do aparelho (sobrevive a reboot). */
     fun idDispositivo(context: Context): String =
@@ -36,6 +37,12 @@ object Config {
     }
 
     fun inscrito(context: Context): Boolean = token(context) != null
+
+    fun codigoInscricao(context: Context): String? = prefs(context).getString(K_CODIGO, null)
+
+    fun guardarCodigo(context: Context, codigo: String) {
+        prefs(context).edit().putString(K_CODIGO, codigo).apply()
+    }
 
     /** true quando a URL ja foi trocada pela real (nao e mais o placeholder). */
     fun configurado(): Boolean =

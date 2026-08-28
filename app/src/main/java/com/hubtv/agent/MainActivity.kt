@@ -118,11 +118,39 @@ class MainActivity : AppCompatActivity() {
             }
         } }
 
+        val codigoSalvo = Config.codigoInscricao(this)
+        if (!codigoSalvo.isNullOrBlank()) {
+            v.campoCodigo.setText(codigoSalvo)
+        }
+
+        v.btnInscrever.setOnClickListener { comProtecao {
+            val codigo = v.campoCodigo.text.toString().trim()
+            if (codigo.length < 6) {
+                Registro.linha("digite o codigo de 6 digitos gerado no painel")
+                return@comProtecao
+            }
+            Config.guardarCodigo(this, codigo)
+            lifecycleScope.launch {
+                ocupado(true)
+                when (val r = CheckIn.pulso(this@MainActivity)) {
+                    is CheckIn.Resultado.Ok -> {
+                        Registro.linha("dispositivo inscrito com sucesso")
+                        atualizarEstadoInscricao()
+                    }
+                    is CheckIn.Resultado.Falha ->
+                        Registro.linha("inscricao falhou: ${r.motivo}")
+                }
+                ocupado(false)
+            }
+        } }
+
         v.btnCheckin.setOnClickListener { comProtecao {
             lifecycleScope.launch {
                 ocupado(true)
                 if (!Config.configurado()) {
                     Registro.linha("configure Config.BASE_URL (VPS) antes de testar o check-in")
+                } else if (!Config.inscrito(this@MainActivity)) {
+                    Registro.linha("inscreva o dispositivo primeiro (digite o codigo)")
                 } else {
                     when (val r = CheckIn.pulso(this@MainActivity)) {
                         is CheckIn.Resultado.Ok ->
@@ -154,12 +182,15 @@ class MainActivity : AppCompatActivity() {
         }
 
         atualizarBotaoLauncher()
+        atualizarEstadoInscricao()
 
         Registro.linha("app iniciado - preparando identidade em segundo plano...")
-        Registro.linha("fluxo: no HubTV rode 'adb tcpip 5555', depois toque CONECTAR aqui")
-        Registro.linha("um dialogo 'sempre permitir' aparece - um toque e pronto, sem codigo")
-        Registro.linha("PARA SOBREVIVER AO DESLIGAMENTO 100%: depois de conectar, toque FIXAR PORTA 5555")
-        Registro.linha("depois disso, toque ENTRAR NO MODO LAUNCHER para ativar a tela inicial")
+        Registro.linha("fluxo: 1) CONECTAR o ADB  2) FIXAR PORTA 5555  3) INSCREVER com codigo  4) ENTRAR NO MODO LAUNCHER")
+        if (Config.inscrito(this)) {
+            Registro.linha("dispositivo ja inscrito no painel")
+        } else {
+            Registro.linha("digite o codigo de 6 digitos gerado no painel e toque INSCREVER")
+        }
 
         lifecycleScope.launch {
             val nova = try {
@@ -206,6 +237,14 @@ class MainActivity : AppCompatActivity() {
     private fun marcarAdbConfigurado() {
         LauncherActivity.marcarAdbConfigurado(this)
         atualizarBotaoLauncher()
+    }
+
+    private fun atualizarEstadoInscricao() {
+        val inscrito = Config.inscrito(this)
+        v.campoCodigo.isEnabled = !inscrito
+        v.btnInscrever.isEnabled = !inscrito
+        v.btnInscrever.text = if (inscrito) "Inscrito" else "Inscrever"
+        v.btnCheckin.isEnabled = inscrito
     }
 
     private fun atualizarBotaoLauncher() {

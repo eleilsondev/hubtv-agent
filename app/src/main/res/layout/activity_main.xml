@@ -143,13 +143,6 @@
             android:layout_marginStart="10dp"
             android:text="@string/fixar_porta" />
 
-        <Button
-            android:id="@+id/btn_checkin"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
-            android:text="@string/checkin" />
-
         <ProgressBar
             android:id="@+id/progresso"
             android:layout_width="26dp"
@@ -157,6 +150,43 @@
             android:layout_gravity="center_vertical"
             android:layout_marginStart="14dp"
             android:visibility="invisible" />
+    </LinearLayout>
+
+    <!-- inscricao com codigo -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="14dp"
+        android:gravity="center_vertical">
+
+        <EditText
+            android:id="@+id/campo_codigo"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:hint="@string/codigo_inscricao"
+            android:inputType="number"
+            android:maxLength="6"
+            android:importantForAutofill="no"
+            android:textColor="@color/texto"
+            android:textColorHint="@color/fraco"
+            android:textSize="18sp"
+            android:letterSpacing="0.15" />
+
+        <Button
+            android:id="@+id/btn_inscrever"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:text="@string/inscrever" />
+
+        <Button
+            android:id="@+id/btn_checkin"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:text="@string/checkin" />
     </LinearLayout>
 
     <!-- botao para entrar no modo launcher -->

@@ -4,6 +4,9 @@ import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
 import android.graphics.BitmapFactory
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
@@ -53,6 +56,11 @@ class LauncherActivity : AppCompatActivity() {
         iniciarBannerRotacao()
     }
 
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        atualizarDoServidor()
+    }
+
     override fun onResume() {
         super.onResume()
         if (!adbJaConfigurado()) {
@@ -62,6 +70,19 @@ class LauncherActivity : AppCompatActivity() {
         }
         config = carregarConfig()
         aplicarConfig()
+    }
+
+    private fun atualizarDoServidor() {
+        if (!Config.inscrito(this)) return
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                CheckIn.pulso(this@LauncherActivity)
+            } catch (_: Exception) {}
+            handler.post {
+                config = carregarConfig()
+                aplicarConfig()
+            }
+        }
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
