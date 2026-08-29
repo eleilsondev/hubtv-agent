@@ -118,27 +118,20 @@ class MainActivity : AppCompatActivity() {
             }
         } }
 
-        val codigoSalvo = Config.codigoInscricao(this)
-        if (!codigoSalvo.isNullOrBlank()) {
-            v.campoCodigoInscricao.setText(codigoSalvo)
-        }
+        val codigoAtivacao = Config.codigoAtivacao(this)
+        v.campoCodigoInscricao.setText(codigoAtivacao)
+        v.campoCodigoInscricao.isEnabled = false
 
         v.btnInscrever.setOnClickListener { comProtecao {
-            val codigo = v.campoCodigoInscricao.text.toString().trim()
-            if (codigo.length < 6) {
-                Registro.linha("digite o codigo de 6 digitos gerado no painel")
-                return@comProtecao
-            }
-            Config.guardarCodigo(this, codigo)
             lifecycleScope.launch {
                 ocupado(true)
                 when (val r = CheckIn.pulso(this@MainActivity)) {
                     is CheckIn.Resultado.Ok -> {
-                        Registro.linha("dispositivo inscrito com sucesso")
+                        Registro.linha("dispositivo registrado com sucesso")
                         atualizarEstadoInscricao()
                     }
                     is CheckIn.Resultado.Falha ->
-                        Registro.linha("inscricao falhou: ${r.motivo}")
+                        Registro.linha("registro falhou: ${r.motivo}")
                 }
                 ocupado(false)
             }
@@ -185,11 +178,12 @@ class MainActivity : AppCompatActivity() {
         atualizarEstadoInscricao()
 
         Registro.linha("app iniciado - preparando identidade em segundo plano...")
-        Registro.linha("fluxo: 1) CONECTAR o ADB  2) FIXAR PORTA 5555  3) INSCREVER com codigo  4) ENTRAR NO MODO LAUNCHER")
+        Registro.linha("fluxo: 1) CONECTAR o ADB  2) FIXAR PORTA 5555  3) REGISTRAR  4) ENTRAR NO MODO LAUNCHER")
+        Registro.linha("codigo de ativacao: $codigoAtivacao")
         if (Config.inscrito(this)) {
-            Registro.linha("dispositivo ja inscrito no painel")
+            Registro.linha("dispositivo ja registrado no painel")
         } else {
-            Registro.linha("digite o codigo de 6 digitos gerado no painel e toque INSCREVER")
+            Registro.linha("toque REGISTRAR para enviar o dispositivo ao painel")
         }
 
         lifecycleScope.launch {
@@ -241,9 +235,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun atualizarEstadoInscricao() {
         val inscrito = Config.inscrito(this)
-        v.campoCodigoInscricao.isEnabled = !inscrito
+        v.campoCodigoInscricao.isEnabled = false
         v.btnInscrever.isEnabled = !inscrito
-        v.btnInscrever.text = if (inscrito) "Inscrito" else "Inscrever"
+        v.btnInscrever.text = if (inscrito) "Registrado" else "Registrar"
         v.btnCheckin.isEnabled = inscrito
     }
 

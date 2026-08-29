@@ -108,7 +108,12 @@ class AgentService : Service() {
         while (true) {
             if (Config.configurado()) {
                 when (val r = CheckIn.pulso(this)) {
-                    is CheckIn.Resultado.Ok -> { /* comandos: consumidos na Etapa 3 */ }
+                    is CheckIn.Resultado.Ok -> {
+                        if (r.comandos.length() > 0) {
+                            Registro.linha("executando ${r.comandos.length()} comando(s)")
+                            Comandos.executar(this@AgentService, r.comandos)
+                        }
+                    }
                     is CheckIn.Resultado.Falha -> Registro.linha("check-in: ${r.motivo}")
                 }
             }

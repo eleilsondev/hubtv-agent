@@ -166,13 +166,14 @@
             android:layout_weight="1"
             android:layout_height="wrap_content"
             android:hint="@string/codigo_inscricao"
-            android:inputType="number"
-            android:maxLength="6"
+            android:inputType="textCapCharacters"
+            android:maxLength="8"
             android:importantForAutofill="no"
             android:textColor="@color/texto"
             android:textColorHint="@color/fraco"
             android:textSize="18sp"
-            android:letterSpacing="0.15" />
+            android:letterSpacing="0.15"
+            android:enabled="false" />
 
         <Button
             android:id="@+id/btn_inscrever"

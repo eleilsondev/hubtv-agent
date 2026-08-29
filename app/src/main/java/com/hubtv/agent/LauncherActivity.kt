@@ -26,6 +26,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import org.json.JSONObject
@@ -54,6 +55,8 @@ class LauncherActivity : AppCompatActivity() {
         aplicarConfig()
         iniciarRelogio()
         iniciarBannerRotacao()
+        verificarAtivacao()
+        verificarNotificacoes()
     }
 
     override fun onNewIntent(intent: Intent?) {
@@ -70,6 +73,7 @@ class LauncherActivity : AppCompatActivity() {
         }
         config = carregarConfig()
         aplicarConfig()
+        verificarAtivacao()
     }
 
     private fun atualizarDoServidor() {
@@ -81,6 +85,8 @@ class LauncherActivity : AppCompatActivity() {
             handler.post {
                 config = carregarConfig()
                 aplicarConfig()
+                verificarAtivacao()
+                verificarNotificacoes()
             }
         }
     }
@@ -95,7 +101,6 @@ class LauncherActivity : AppCompatActivity() {
 
     @Suppress("DEPRECATION")
     override fun onBackPressed() {
-        // launcher ignora back
     }
 
     private fun adbJaConfigurado(): Boolean {
@@ -116,6 +121,73 @@ class LauncherActivity : AppCompatActivity() {
         }
     }
 
+    // --- Ativacao ---
+
+    private fun verificarAtivacao() {
+        val prefs = getSharedPreferences("hubtv_agente", MODE_PRIVATE)
+        val ativado = prefs.getBoolean("ativado", false)
+        val telaAtivacao = findViewById<View>(R.id.tela_ativacao)
+        val codigoView = findViewById<TextView>(R.id.codigo_ativacao_display)
+        val statusView = findViewById<TextView>(R.id.ativacao_status_texto)
+
+        if (!ativado) {
+            telaAtivacao.visibility = View.VISIBLE
+            codigoView.text = Config.codigoAtivacao(this)
+            statusView.text = "Aguardando ativacao pelo revendedor..."
+
+            if (!Config.inscrito(this)) {
+                CoroutineScope(Dispatchers.IO).launch {
+                    try { CheckIn.pulso(this@LauncherActivity) } catch (_: Exception) {}
+                    handler.post { verificarAtivacao() }
+                }
+            }
+        } else {
+            telaAtivacao.visibility = View.GONE
+            val expiraEm = prefs.getString("expira_em", "")
+            if (!expiraEm.isNullOrBlank()) {
+                Registro.linha("licenca ativa ate $expiraEm")
+            }
+        }
+    }
+
+    // --- Notificacoes ---
+
+    private fun verificarNotificacoes() {
+        val notificacoes = CheckIn.lerNotificacoes(this)
+        if (notificacoes.length() == 0) return
+
+        val n = notificacoes.getJSONObject(0)
+        val titulo = n.optString("titulo", "Notificacao")
+        val mensagem = n.optString("mensagem", "")
+        val id = n.optInt("id", 0)
+
+        AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
+            .setTitle(titulo)
+            .setMessage(mensagem)
+            .setPositiveButton("OK") { _, _ ->
+                if (id > 0) {
+                    CoroutineScope(Dispatchers.IO).launch {
+                        CheckIn.marcarLida(this@LauncherActivity, id)
+                    }
+                }
+                val restantes = org.json.JSONArray()
+                for (i in 1 until notificacoes.length()) {
+                    restantes.put(notificacoes.getJSONObject(i))
+                }
+                if (restantes.length() > 0) {
+                    getSharedPreferences("hubtv_notificacoes", MODE_PRIVATE)
+                        .edit().putString("pendentes", restantes.toString()).apply()
+                    handler.postDelayed({ verificarNotificacoes() }, 500)
+                } else {
+                    CheckIn.limparNotificacoes(this)
+                }
+            }
+            .setCancelable(false)
+            .show()
+    }
+
+    // --- Config ---
+
     private fun aplicarConfig() {
         val cfg = config
         val nome = cfg?.optString("nome", "HUB TV") ?: "HUB TV"
@@ -124,9 +196,11 @@ class LauncherActivity : AppCompatActivity() {
         findViewById<TextView>(R.id.banner_placeholder).text = nome
 
         aplicarCores(cfg)
+        aplicarFundo(cfg)
         aplicarLogo(cfg)
+        aplicarRelogio(cfg)
+        aplicarAlturaBanner(cfg)
         montarAtalhosDoSistema(cfg)
-        montarCategorias(cfg)
         montarApps(cfg)
         montarAtalhosApps(cfg)
         montarBanner(cfg)
@@ -158,9 +232,32 @@ class LauncherActivity : AppCompatActivity() {
         } catch (_: Exception) {}
     }
 
+    private fun aplicarFundo(cfg: JSONObject?) {
+        val fundoBase64 = cfg?.optString("fundo", "") ?: ""
+        val fundoView = findViewById<ImageView>(R.id.fundo_imagem)
+
+        if (fundoBase64.isNotEmpty() && fundoBase64.contains("base64,")) {
+            try {
+                val dados = fundoBase64.substringAfter("base64,")
+                val bytes = Base64.decode(dados, Base64.DEFAULT)
+                val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                fundoView.setImageBitmap(bitmap)
+                fundoView.visibility = View.VISIBLE
+                findViewById<View>(R.id.fundo_gradiente).visibility = View.GONE
+            } catch (_: Exception) {
+                fundoView.visibility = View.GONE
+            }
+        } else {
+            fundoView.visibility = View.GONE
+            findViewById<View>(R.id.fundo_gradiente).visibility = View.VISIBLE
+        }
+    }
+
     private fun aplicarLogo(cfg: JSONObject?) {
         val logoBase64 = cfg?.optString("logo", "") ?: ""
         val logoView = findViewById<ImageView>(R.id.logo)
+        val nomeView = findViewById<TextView>(R.id.nome_launcher)
+        val posicao = cfg?.optString("posicao_logo", "canto") ?: "canto"
 
         if (logoBase64.isNotEmpty() && logoBase64.contains("base64,")) {
             try {
@@ -175,9 +272,47 @@ class LauncherActivity : AppCompatActivity() {
         } else {
             logoView.visibility = View.GONE
         }
+
+        if (posicao == "centro") {
+            nomeView.gravity = android.view.Gravity.CENTER
+        } else {
+            nomeView.gravity = android.view.Gravity.START or android.view.Gravity.CENTER_VERTICAL
+        }
     }
 
-    // --- Atalhos do sistema (WiFi, Bluetooth, Config) ---
+    private fun aplicarRelogio(cfg: JSONObject?) {
+        val mostrar = cfg?.optBoolean("mostrar_relogio", true) ?: true
+        findViewById<View>(R.id.relogio_container).visibility =
+            if (mostrar) View.VISIBLE else View.GONE
+    }
+
+    private fun aplicarAlturaBanner(cfg: JSONObject?) {
+        val altura = cfg?.optInt("altura_banner", 160) ?: 160
+        val banner = findViewById<View>(R.id.banner_container)
+        val params = banner.layoutParams
+        params.height = dp(altura)
+        banner.layoutParams = params
+    }
+
+    // --- Atalhos do sistema (WiFi, Bluetooth, Config) com icones SVG ---
+
+    private val ICONE_MAP = mapOf(
+        "wifi" to R.drawable.ic_wifi,
+        "bluetooth" to R.drawable.ic_bluetooth,
+        "config" to R.drawable.ic_settings,
+        "settings" to R.drawable.ic_settings,
+        "wrench" to R.drawable.ic_wrench
+    )
+
+    private fun resolverIconeDrawable(iconeStr: String, intent: String): Int? {
+        val lower = iconeStr.lowercase()
+        for ((key, res) in ICONE_MAP) {
+            if (lower.contains(key)) return res
+        }
+        if (intent.contains("WIFI")) return R.drawable.ic_wifi
+        if (intent.contains("BLUETOOTH")) return R.drawable.ic_bluetooth
+        return R.drawable.ic_settings
+    }
 
     private fun montarAtalhosDoSistema(cfg: JSONObject?) {
         val container = findViewById<LinearLayout>(R.id.sistema_atalhos)
@@ -191,7 +326,7 @@ class LauncherActivity : AppCompatActivity() {
             (0 until atalhos.length()).map { i ->
                 val a = atalhos.getJSONObject(i)
                 AtalhoSistema(
-                    a.optString("icone", "⚙"),
+                    a.optString("icone", "settings"),
                     a.optString("nome", "Config"),
                     a.optString("intent", "android.settings.SETTINGS"),
                     a.optBoolean("senha", false)
@@ -199,18 +334,18 @@ class LauncherActivity : AppCompatActivity() {
             }
         } else {
             listOf(
-                AtalhoSistema("📶", "WiFi", "android.settings.WIFI_SETTINGS", false),
-                AtalhoSistema("🔵", "Bluetooth", "android.settings.BLUETOOTH_SETTINGS", false),
-                AtalhoSistema("⚙", "Config", "android.settings.SETTINGS", true)
+                AtalhoSistema("wifi", "WiFi", "android.settings.WIFI_SETTINGS", false),
+                AtalhoSistema("bluetooth", "Bluetooth", Settings.ACTION_BLUETOOTH_SETTINGS, false),
+                AtalhoSistema("settings", "Config", "android.settings.SETTINGS", true)
             )
         }
 
         val senhaGlobal = cfg?.optString("senha_config", "") ?: ""
 
         for (atalho in lista) {
-            val btn = TextView(this).apply {
-                text = "${atalho.icone}"
-                textSize = 18f
+            val btn = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = android.view.Gravity.CENTER
                 setPadding(dp(10), dp(6), dp(10), dp(6))
                 setBackgroundResource(R.drawable.atalho_bg)
                 isFocusable = true
@@ -241,6 +376,16 @@ class LauncherActivity : AppCompatActivity() {
                 }
             }
 
+            val iconRes = resolverIconeDrawable(atalho.icone, atalho.intent)
+            if (iconRes != null) {
+                val iv = ImageView(this).apply {
+                    setImageDrawable(ContextCompat.getDrawable(context, iconRes))
+                    layoutParams = LinearLayout.LayoutParams(dp(20), dp(20))
+                    scaleType = ImageView.ScaleType.FIT_CENTER
+                }
+                btn.addView(iv)
+            }
+
             val params = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
@@ -249,10 +394,8 @@ class LauncherActivity : AppCompatActivity() {
             container.addView(btn, params)
         }
 
-        // botao oculto para config do agente (engrenagem pequena)
-        val btnAgente = TextView(this).apply {
-            text = "🔧"
-            textSize = 14f
+        val btnAgente = LinearLayout(this).apply {
+            gravity = android.view.Gravity.CENTER
             setPadding(dp(8), dp(6), dp(8), dp(6))
             alpha = 0.4f
             isFocusable = true
@@ -261,9 +404,15 @@ class LauncherActivity : AppCompatActivity() {
             setOnFocusChangeListener { v, hasFocus ->
                 v.alpha = if (hasFocus) 0.9f else 0.4f
             }
-
             setOnClickListener { abrirConfigAdb() }
         }
+        val ivWrench = ImageView(this).apply {
+            setImageDrawable(ContextCompat.getDrawable(context, R.drawable.ic_wrench))
+            layoutParams = LinearLayout.LayoutParams(dp(16), dp(16))
+            scaleType = ImageView.ScaleType.FIT_CENTER
+        }
+        btnAgente.addView(ivWrench)
+
         val p = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.WRAP_CONTENT,
             LinearLayout.LayoutParams.WRAP_CONTENT
@@ -293,71 +442,11 @@ class LauncherActivity : AppCompatActivity() {
             .show()
     }
 
-    // --- Categorias ---
-
-    private fun montarCategorias(cfg: JSONObject?) {
-        val container = findViewById<LinearLayout>(R.id.categorias_container)
-        container.removeAllViews()
-
-        val cats = cfg?.optJSONArray("categorias") ?: return
-        if (cats.length() == 0) return
-
-        // tab "Todos" primeiro
-        val tvTodos = criarTabCategoria("Todos", true)
-        tvTodos.setOnFocusChangeListener { v, hasFocus ->
-            v.setBackgroundResource(
-                if (hasFocus) R.drawable.categoria_tab_selected else R.drawable.categoria_tab_bg
-            )
-            if (hasFocus) filtrarApps(-1)
-        }
-        tvTodos.setOnClickListener { filtrarApps(-1) }
-        container.addView(tvTodos, layoutParamsTab())
-
-        for (i in 0 until cats.length()) {
-            val cat = cats.getJSONObject(i)
-            val icone = cat.optString("icone", "")
-            val nome = cat.optString("nome", "")
-            val texto = if (icone.isNotEmpty()) "$icone $nome" else nome
-            val catId = cat.optInt("id", -1)
-
-            val tv = criarTabCategoria(texto, false)
-            tv.setOnFocusChangeListener { v, hasFocus ->
-                v.setBackgroundResource(
-                    if (hasFocus) R.drawable.categoria_tab_selected else R.drawable.categoria_tab_bg
-                )
-                if (hasFocus) filtrarApps(catId)
-            }
-            tv.setOnClickListener { filtrarApps(catId) }
-            container.addView(tv, layoutParamsTab())
-        }
-    }
-
-    private fun criarTabCategoria(texto: String, selecionado: Boolean): TextView {
-        return TextView(this).apply {
-            text = texto
-            setTextColor(Color.WHITE)
-            textSize = 13f
-            setPadding(dp(14), dp(8), dp(14), dp(8))
-            setBackgroundResource(
-                if (selecionado) R.drawable.categoria_tab_selected else R.drawable.categoria_tab_bg
-            )
-            isFocusable = true
-            isFocusableInTouchMode = true
-        }
-    }
-
-    private fun layoutParamsTab(): LinearLayout.LayoutParams {
-        return LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.WRAP_CONTENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply { setMargins(0, 0, dp(8), 0) }
-    }
-
-    // --- Apps (so os do servidor) ---
+    // --- Apps (grid de largura total, sem categorias) ---
 
     private fun montarApps(cfg: JSONObject?) {
         val grid = findViewById<RecyclerView>(R.id.apps_grid)
-        grid.layoutManager = GridLayoutManager(this, 2)
+        grid.layoutManager = GridLayoutManager(this, 5)
 
         val apps = cfg?.optJSONArray("apps") ?: return
         val lista = mutableListOf<JSONObject>()
@@ -524,22 +613,6 @@ class LauncherActivity : AppCompatActivity() {
                 handler.postDelayed(this, 30_000)
             }
         })
-    }
-
-    private fun filtrarApps(categoriaId: Int) {
-        val grid = findViewById<RecyclerView>(R.id.apps_grid)
-        val apps = config?.optJSONArray("apps") ?: return
-        val lista = mutableListOf<JSONObject>()
-
-        for (i in 0 until apps.length()) {
-            val app = apps.getJSONObject(i)
-            if (app.optString("tipo") == "atalho") continue
-            if (categoriaId == -1 || app.optInt("categoria_id", -1) == categoriaId) {
-                lista.add(app)
-            }
-        }
-
-        grid.adapter = AppAdapter(this, lista, config)
     }
 
     fun abrirApp(pacote: String) {

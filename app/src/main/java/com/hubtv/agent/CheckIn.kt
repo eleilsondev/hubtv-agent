@@ -9,17 +9,6 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 
-/**
- * O agente telefona pra casa: manda um retrato do aparelho ao painel.
- *
- * Fluxo: se ainda nao ha token, faz a INSCRICAO uma vez com a chave
- * compartilhada e guarda o token devolvido; a partir dai, so CHECK-IN
- * periodico. A resposta do check-in ja traz uma lista de comandos - a
- * ponte para a Etapa 3. Por enquanto ela chega vazia.
- *
- * Rede em Kotlin puro (HttpURLConnection + org.json), sem nenhuma
- * dependencia nova - a lição das bibliotecas de cripto vale aqui tambem.
- */
 object CheckIn {
 
     sealed class Resultado {
@@ -27,7 +16,6 @@ object CheckIn {
         data class Falha(val motivo: String) : Resultado()
     }
 
-    /** Um pulso completo: inscreve se preciso e faz o check-in. */
     suspend fun pulso(context: Context): Resultado = withContext(Dispatchers.IO) {
         if (!Config.configurado()) {
             return@withContext Resultado.Falha("URL do painel ainda nao configurada (Config.BASE_URL)")
@@ -36,7 +24,7 @@ object CheckIn {
             if (!Config.inscrito(context)) {
                 when (val r = inscrever(context)) {
                     is Resultado.Falha -> return@withContext r
-                    is Resultado.Ok -> { /* segue para o check-in */ }
+                    is Resultado.Ok -> { }
                 }
             }
             checkin(context)
@@ -45,16 +33,9 @@ object CheckIn {
         }
     }
 
-    // ------------------------------------------------------------------
-
     private fun inscrever(context: Context): Resultado {
-        val codigo = Config.codigoInscricao(context)
-        if (codigo.isNullOrBlank()) {
-            return Resultado.Falha("codigo de inscricao nao configurado")
-        }
-
         val corpo = retrato(context)
-        corpo.put("codigo", codigo)
+        corpo.put("codigo_ativacao", Config.codigoAtivacao(context))
 
         val resp = postar(
             "${Config.BASE_URL}/api/dispositivos/registrar",
@@ -85,8 +66,15 @@ object CheckIn {
         Registro.linha("check-in ok - ${comandos.length()} comando(s) na fila")
 
         val bloqueado = resp.optBoolean("bloqueado", false)
-        context.getSharedPreferences("hubtv_agente", Context.MODE_PRIVATE)
-            .edit().putBoolean("bloqueado", bloqueado).apply()
+        val ativado = resp.optBoolean("ativado", false)
+        val expiraEm = resp.optString("expira_em", "")
+
+        val prefs = context.getSharedPreferences("hubtv_agente", Context.MODE_PRIVATE)
+        prefs.edit()
+            .putBoolean("bloqueado", bloqueado)
+            .putBoolean("ativado", ativado)
+            .putString("expira_em", expiraEm)
+            .apply()
 
         val launcher = resp.optJSONObject("launcher")
         if (launcher != null) {
@@ -94,10 +82,41 @@ object CheckIn {
             Registro.linha("config do launcher atualizada")
         }
 
+        val notificacoes = resp.optJSONArray("notificacoes")
+        if (notificacoes != null && notificacoes.length() > 0) {
+            salvarNotificacoes(context, notificacoes)
+        }
+
         return Resultado.Ok(comandos)
     }
 
-    /** O retrato do aparelho que vai no corpo do POST. */
+    private fun salvarNotificacoes(context: Context, notificacoes: JSONArray) {
+        val prefs = context.getSharedPreferences("hubtv_notificacoes", Context.MODE_PRIVATE)
+        prefs.edit().putString("pendentes", notificacoes.toString()).apply()
+    }
+
+    fun lerNotificacoes(context: Context): JSONArray {
+        val prefs = context.getSharedPreferences("hubtv_notificacoes", Context.MODE_PRIVATE)
+        val json = prefs.getString("pendentes", null) ?: return JSONArray()
+        return try { JSONArray(json) } catch (_: Exception) { JSONArray() }
+    }
+
+    fun limparNotificacoes(context: Context) {
+        context.getSharedPreferences("hubtv_notificacoes", Context.MODE_PRIVATE)
+            .edit().remove("pendentes").apply()
+    }
+
+    fun marcarLida(context: Context, notificacaoId: Int) {
+        val token = Config.token(context) ?: return
+        try {
+            postar(
+                "${Config.BASE_URL}/api/notificacoes/lida",
+                JSONObject().put("id", notificacaoId),
+                mapOf("Authorization" to "Bearer $token")
+            )
+        } catch (_: Exception) {}
+    }
+
     private fun retrato(context: Context): JSONObject {
         val apps = JSONArray()
         val pm = context.packageManager
@@ -105,7 +124,7 @@ object CheckIn {
             try {
                 val info = pm.getPackageInfo(pkg, 0)
                 apps.put(JSONObject().put("pkg", pkg).put("versao", info.versionName ?: "?"))
-            } catch (_: Exception) { /* app nao instalado - ignora */ }
+            } catch (_: Exception) { }
         }
         return JSONObject()
             .put("device_id", Config.idDispositivo(context))
@@ -148,7 +167,6 @@ object CheckIn {
         }
     }
 
-    /** Apps da HUB TV cuja versao instalada interessa ao relatorio. */
     private val ALVOS = listOf(
         "org.smarttube.stable",
         "com.global.unitviptv",

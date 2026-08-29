@@ -87,10 +87,13 @@ sozinho após o boot, sem PC**. É a "Etapa 1" que prova a arquitetura de frota.
 - `.../AgentService.kt` — serviço foreground; laço de reconexão pós-boot.
 - `.../BootReceiver.kt` — starta o serviço no boot.
 - `.../AgentApp.kt` — handler de crash em arquivo.
-- `.../LauncherActivity.kt` — **tela inicial (HOME)** da TV. Mostra apps,
-  categorias, banners e atalhos rapidos. Config vem do painel via check-in
-  e fica em SharedPreferences `hubtv_launcher`. Tela de bloqueio integrada.
-  Tecla MENU abre a MainActivity (painel de controle do agente).
+- `.../LauncherActivity.kt` — **tela inicial (HOME)** da TV. Layout vertical:
+  banner no topo (altura configuravel) + grid 5 colunas de apps abaixo.
+  Sem menu de categorias. Atalhos do sistema usam icones SVG (ic_wifi,
+  ic_bluetooth, ic_settings). Config vem do painel via check-in e fica em
+  SharedPreferences `hubtv_launcher`. Tela de bloqueio e tela de ativacao
+  (mostra codigo de 8 chars gerado localmente). Suporta notificacoes do
+  servidor (AlertDialog sequencial). Tecla MENU abre a MainActivity.
 - `.../MainActivity.kt` — UI de controle do agente (botões: Ligar depuração,
   Parear, Conectar, Testar poderes, Fixar porta 5555, Limpar). Registro na tela.
 - `.../Registro.kt` — log em memória observável, exibido na UI.
@@ -114,15 +117,21 @@ sobreviver ao desligamento total.
 - **Etapa 2 (CONCLUÍDA):** check-in periódico + painel Laravel com dashboard,
   gestão de dispositivos, usuários, comandos remotos.
 - **Etapa 3 (CONCLUÍDA):** fila de comandos (shell, install, reboot, bloquear,
-  desbloquear, atualizar_launcher) com report de resultado pelo APK.
-- **Launcher (EM ANDAMENTO):** LauncherActivity como HOME da TV Box. Fluxo em
-  duas fases: primeiro configura ADB (MainActivity), depois ativa modo launcher
-  (HOME). Config gerenciada pelo painel web (perfis, categorias, apps, banners,
-  atalhos do sistema com senha, senha de config). Entregue ao APK pelo check-in.
-  `Config.BASE_URL` atualizado para `https://hub.tv.br`. Launcher so mostra
-  apps do servidor, bloqueia abertura quando dispositivo vencido/bloqueado.
-  Atalhos do sistema (WiFi, Bluetooth, Config) no topo com protecao por senha.
-- Testar build e instalar no aparelho para validar launcher.
+  desbloquear, atualizar_launcher, atualizar_agente) com report de resultado
+  pelo APK. `Comandos.kt` executa cada tipo via `Adb.shell()` e reporta o
+  resultado ao painel. Auto-update: dispositivo baixa novo APK de URL e faz
+  `pm install -r` sobre si mesmo.
+- **Launcher (v2 CONCLUIDO):** LauncherActivity como HOME da TV Box. Layout
+  vertical: banner (altura configuravel) + grid 5 colunas. Sem categorias.
+  Icones SVG profissionais (WiFi, Bluetooth, Config, Wrench). Ativacao por
+  codigo de 8 chars gerado no dispositivo — revendedor ativa no painel
+  consumindo credito. Notificacoes do servidor exibidas como dialogo.
+  Config do painel: posicao_logo (canto/centro), mostrar_relogio, fundo
+  customizado, altura_banner. APK upload no cadastro de apps.
+- **Painel v2:** Planos, Creditos (XXXX-XXXX), Ativacao (revendedor consome
+  credito com codigo do dispositivo), Central de Comandos (modelos + shell
+  manual), Notificacoes (envio por dispositivo). Auto-push launcher update
+  quando perfil muda. Codigo de ativacao gerado no device, sem enrollment.
 
 ## Convenções
 

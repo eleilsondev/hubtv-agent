@@ -10,11 +10,19 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
+    <!-- fundo imagem customizada -->
+    <ImageView
+        android:id="@+id/fundo_imagem"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="centerCrop"
+        android:visibility="gone" />
+
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical"
-        android:padding="24dp">
+        android:padding="20dp">
 
         <!-- TOPBAR: logo + nome + atalhos sistema + relogio -->
         <LinearLayout
@@ -22,12 +30,12 @@
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:layout_marginBottom="16dp">
+            android:layout_marginBottom="10dp">
 
             <ImageView
                 android:id="@+id/logo"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
                 android:scaleType="fitCenter"
                 android:visibility="gone" />
 
@@ -37,9 +45,9 @@
                 android:layout_height="wrap_content"
                 android:text="HUB TV"
                 android:textColor="#FFFFFF"
-                android:textSize="22sp"
+                android:textSize="20sp"
                 android:textStyle="bold"
-                android:layout_marginStart="12dp"
+                android:layout_marginStart="10dp"
                 android:shadowColor="#80000000"
                 android:shadowDx="0"
                 android:shadowDy="2"
@@ -64,122 +72,99 @@
                 android:layout_marginEnd="8dp"
                 android:background="@drawable/circulo_verde" />
 
-            <TextView
-                android:id="@+id/relogio"
+            <!-- data e hora -->
+            <LinearLayout
+                android:id="@+id/relogio_container"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textColor="#B0FFFFFF"
-                android:textSize="16sp"
-                android:fontFamily="sans-serif-light" />
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
 
-            <TextView
-                android:id="@+id/data"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textColor="#70FFFFFF"
-                android:textSize="12sp"
-                android:layout_marginStart="12dp" />
+                <TextView
+                    android:id="@+id/relogio"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="#B0FFFFFF"
+                    android:textSize="16sp"
+                    android:fontFamily="sans-serif-light" />
+
+                <TextView
+                    android:id="@+id/data"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="#70FFFFFF"
+                    android:textSize="12sp"
+                    android:layout_marginStart="10dp" />
+            </LinearLayout>
         </LinearLayout>
 
-        <!-- CONTEUDO PRINCIPAL -->
-        <LinearLayout
+        <!-- BANNER (altura configuravel) -->
+        <FrameLayout
+            android:id="@+id/banner_container"
+            android:layout_width="match_parent"
+            android:layout_height="160dp"
+            android:background="@drawable/card_bg"
+            android:clipChildren="true"
+            android:clipToPadding="true"
+            android:layout_marginBottom="10dp">
+
+            <ImageView
+                android:id="@+id/banner_imagem"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:scaleType="centerCrop"
+                android:visibility="gone" />
+
+            <LinearLayout
+                android:id="@+id/banner_overlay"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom"
+                android:orientation="vertical"
+                android:padding="12dp"
+                android:background="@drawable/gradiente_inferior">
+
+                <TextView
+                    android:id="@+id/banner_titulo"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="#FFFFFF"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    android:shadowColor="#80000000"
+                    android:shadowDx="0"
+                    android:shadowDy="1"
+                    android:shadowRadius="3" />
+
+                <TextView
+                    android:id="@+id/banner_subtitulo"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="#B0FFFFFF"
+                    android:textSize="12sp"
+                    android:layout_marginTop="2dp" />
+            </LinearLayout>
+
+            <!-- placeholder quando sem banner -->
+            <TextView
+                android:id="@+id/banner_placeholder"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:text="HUB TV"
+                android:textColor="#30FFFFFF"
+                android:textSize="28sp"
+                android:textStyle="bold" />
+        </FrameLayout>
+
+        <!-- GRID DE APPS (ocupa todo o espaco restante) -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/apps_grid"
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1"
-            android:orientation="horizontal">
-
-            <!-- LADO ESQUERDO: categorias + banner -->
-            <LinearLayout
-                android:layout_width="0dp"
-                android:layout_weight="1.3"
-                android:layout_height="match_parent"
-                android:orientation="vertical"
-                android:layout_marginEnd="16dp">
-
-                <!-- categorias tabs -->
-                <HorizontalScrollView
-                    android:id="@+id/categorias_scroll"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:scrollbars="none"
-                    android:layout_marginBottom="12dp">
-
-                    <LinearLayout
-                        android:id="@+id/categorias_container"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal" />
-                </HorizontalScrollView>
-
-                <!-- banner / carrossel -->
-                <FrameLayout
-                    android:id="@+id/banner_container"
-                    android:layout_width="match_parent"
-                    android:layout_height="0dp"
-                    android:layout_weight="1"
-                    android:background="@drawable/card_bg"
-                    android:clipChildren="true"
-                    android:clipToPadding="true">
-
-                    <ImageView
-                        android:id="@+id/banner_imagem"
-                        android:layout_width="match_parent"
-                        android:layout_height="match_parent"
-                        android:scaleType="centerCrop"
-                        android:visibility="gone" />
-
-                    <LinearLayout
-                        android:id="@+id/banner_overlay"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_gravity="bottom"
-                        android:orientation="vertical"
-                        android:padding="16dp"
-                        android:background="@drawable/gradiente_inferior">
-
-                        <TextView
-                            android:id="@+id/banner_titulo"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:textColor="#FFFFFF"
-                            android:textSize="18sp"
-                            android:textStyle="bold"
-                            android:shadowColor="#80000000"
-                            android:shadowDx="0"
-                            android:shadowDy="1"
-                            android:shadowRadius="3" />
-
-                        <TextView
-                            android:id="@+id/banner_subtitulo"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:textColor="#B0FFFFFF"
-                            android:textSize="13sp"
-                            android:layout_marginTop="2dp" />
-                    </LinearLayout>
-
-                    <!-- placeholder quando sem banner -->
-                    <TextView
-                        android:id="@+id/banner_placeholder"
-                        android:layout_width="match_parent"
-                        android:layout_height="match_parent"
-                        android:gravity="center"
-                        android:text="HUB TV"
-                        android:textColor="#30FFFFFF"
-                        android:textSize="32sp"
-                        android:textStyle="bold" />
-                </FrameLayout>
-            </LinearLayout>
-
-            <!-- LADO DIREITO: grid de apps -->
-            <androidx.recyclerview.widget.RecyclerView
-                android:id="@+id/apps_grid"
-                android:layout_width="0dp"
-                android:layout_weight="0.7"
-                android:layout_height="match_parent"
-                android:clipToPadding="false"
-                android:padding="4dp" />
-        </LinearLayout>
+            android:clipToPadding="false"
+            android:padding="4dp" />
 
         <!-- BARRA INFERIOR: atalhos rapidos de apps -->
         <LinearLayout
@@ -188,9 +173,62 @@
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="start|center_vertical"
-            android:layout_marginTop="12dp" />
+            android:layout_marginTop="8dp" />
 
     </LinearLayout>
+
+    <!-- INFO ATIVACAO (sobreposta quando pendente) -->
+    <FrameLayout
+        android:id="@+id/tela_ativacao"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#E0101828"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:padding="40dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="ATIVACAO NECESSARIA"
+                android:textColor="#FBBF24"
+                android:textSize="22sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Informe o codigo abaixo ao seu revendedor"
+                android:textColor="#80FFFFFF"
+                android:textSize="14sp"
+                android:layout_marginTop="8dp" />
+
+            <TextView
+                android:id="@+id/codigo_ativacao_display"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="#22C55E"
+                android:textSize="48sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.3"
+                android:layout_marginTop="20dp"
+                android:fontFamily="monospace" />
+
+            <TextView
+                android:id="@+id/ativacao_status_texto"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="#60FFFFFF"
+                android:textSize="12sp"
+                android:layout_marginTop="12dp" />
+        </LinearLayout>
+    </FrameLayout>
 
     <!-- TELA DE BLOQUEIO -->
     <FrameLayout
