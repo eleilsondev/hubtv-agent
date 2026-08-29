@@ -601,15 +601,26 @@ class LauncherActivity : AppCompatActivity() {
 
     private fun iniciarRelogio() {
         val fmt = SimpleDateFormat("HH:mm", Locale.ROOT)
-        val fmtData = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT)
         val relogio = findViewById<TextView>(R.id.relogio)
         val data = findViewById<TextView>(R.id.data)
 
+        val prefs = getSharedPreferences("hubtv_agente", MODE_PRIVATE)
+        val expiraEm = prefs.getString("expira_em", "") ?: ""
+
+        if (expiraEm.isNotBlank()) {
+            try {
+                val partes = expiraEm.split("-")
+                data.text = "Venc: ${partes[2]}/${partes[1]}/${partes[0]}"
+            } catch (_: Exception) {
+                data.text = "Venc: $expiraEm"
+            }
+        } else {
+            data.text = "Sem licenca"
+        }
+
         handler.post(object : Runnable {
             override fun run() {
-                val agora = Date()
-                relogio.text = fmt.format(agora)
-                data.text = fmtData.format(agora)
+                relogio.text = fmt.format(Date())
                 handler.postDelayed(this, 30_000)
             }
         })
