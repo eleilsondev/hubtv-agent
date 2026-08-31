@@ -1,32 +1,37 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Card de app do carrossel. Largura e altura FIXAS: e o que impede os
+  icones de achatarem quando o banner cresce ou quando ha muitos apps.
+-->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent"
+    android:layout_width="112dp"
     android:layout_height="wrap_content"
     android:orientation="vertical"
     android:gravity="center"
-    android:padding="8dp"
+    android:paddingTop="12dp"
+    android:paddingBottom="10dp"
+    android:paddingStart="6dp"
+    android:paddingEnd="6dp"
     android:focusable="true"
     android:focusableInTouchMode="true"
     android:background="@drawable/app_card_bg"
-    android:layout_margin="4dp">
+    android:layout_margin="5dp">
 
     <ImageView
         android:id="@+id/app_icone"
-        android:layout_width="52dp"
-        android:layout_height="52dp"
-        android:scaleType="fitCenter"
-        android:layout_marginTop="8dp" />
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:scaleType="fitCenter" />
 
     <TextView
         android:id="@+id/app_icone_letra"
-        android:layout_width="52dp"
-        android:layout_height="52dp"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
         android:gravity="center"
         android:textColor="#000000"
-        android:textSize="22sp"
+        android:textSize="24sp"
         android:textStyle="bold"
-        android:visibility="gone"
-        android:layout_marginTop="8dp" />
+        android:visibility="gone" />
 
     <TextView
         android:id="@+id/app_nome"
@@ -35,8 +40,7 @@
         android:gravity="center"
         android:textColor="#E0FFFFFF"
         android:textSize="12sp"
-        android:maxLines="2"
+        android:singleLine="true"
         android:ellipsize="end"
-        android:layout_marginTop="6dp"
-        android:layout_marginBottom="8dp" />
+        android:layout_marginTop="8dp" />
 </LinearLayout>

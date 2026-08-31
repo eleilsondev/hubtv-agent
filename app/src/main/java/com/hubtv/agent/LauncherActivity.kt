@@ -27,7 +27,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
-import androidx.recyclerview.widget.GridLayoutManager
+import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import org.json.JSONObject
 import java.text.SimpleDateFormat
@@ -40,6 +40,9 @@ class LauncherActivity : AppCompatActivity() {
     private var config: JSONObject? = null
     private var bloqueado = false
     private var bannerIndex = 0
+    /** qual das duas ImageViews do banner esta na frente (crossfade) */
+    private var bannerNoA = false
+    private var rotacaoBanner: Runnable? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -54,9 +57,13 @@ class LauncherActivity : AppCompatActivity() {
         config = carregarConfig()
         aplicarConfig()
         iniciarRelogio()
-        iniciarBannerRotacao()
         verificarAtivacao()
         verificarNotificacoes()
+    }
+
+    override fun onDestroy() {
+        handler.removeCallbacksAndMessages(null)
+        super.onDestroy()
     }
 
     override fun onNewIntent(intent: Intent?) {
@@ -199,8 +206,9 @@ class LauncherActivity : AppCompatActivity() {
         aplicarFundo(cfg)
         aplicarLogo(cfg)
         aplicarRelogio(cfg)
-        aplicarAlturaBanner(cfg)
+        aplicarTamanhoBanner(cfg)
         montarAtalhosDoSistema(cfg)
+        reposicionarTopbar(cfg)
         montarApps(cfg)
         montarAtalhosApps(cfg)
         montarBanner(cfg)
@@ -254,29 +262,72 @@ class LauncherActivity : AppCompatActivity() {
     }
 
     private fun aplicarLogo(cfg: JSONObject?) {
-        val logoBase64 = cfg?.optString("logo", "") ?: ""
         val logoView = findViewById<ImageView>(R.id.logo)
         val nomeView = findViewById<TextView>(R.id.nome_launcher)
-        val posicao = cfg?.optString("posicao_logo", "canto") ?: "canto"
 
-        if (logoBase64.isNotEmpty() && logoBase64.contains("base64,")) {
-            try {
-                val dados = logoBase64.substringAfter("base64,")
-                val bytes = Base64.decode(dados, Base64.DEFAULT)
-                val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                logoView.setImageBitmap(bitmap)
-                logoView.visibility = View.VISIBLE
-            } catch (_: Exception) {
-                logoView.visibility = View.GONE
-            }
+        val logo = decodificarBase64(cfg?.optString("logo", "") ?: "")
+        if (logo != null) {
+            logoView.setImageBitmap(logo)
+            logoView.visibility = View.VISIBLE
         } else {
             logoView.visibility = View.GONE
         }
 
-        if (posicao == "centro") {
-            nomeView.gravity = android.view.Gravity.CENTER
-        } else {
-            nomeView.gravity = android.view.Gravity.START or android.view.Gravity.CENTER_VERTICAL
+        // O painel ja resolveu a regra: no modo automatico o nome escrito
+        // some quando existe uma logo, para nao duplicar a marca.
+        val exibirNome = cfg?.optBoolean("exibir_nome", true) ?: true
+        nomeView.visibility = if (exibirNome) View.VISIBLE else View.GONE
+        (nomeView.layoutParams as? LinearLayout.LayoutParams)?.let {
+            it.marginStart = if (logoView.visibility == View.VISIBLE) dp(10) else 0
+            nomeView.layoutParams = it
+        }
+    }
+
+    /**
+     * Move cada bloco da barra superior (identidade, atalhos do sistema e
+     * relogio) para o slot escolhido no painel. Blocos que caem no mesmo
+     * slot ficam lado a lado, nesta ordem.
+     */
+    private fun reposicionarTopbar(cfg: JSONObject?) {
+        val slots = mapOf(
+            "esquerda" to findViewById<LinearLayout>(R.id.slot_esquerda),
+            "centro" to findViewById<LinearLayout>(R.id.slot_centro),
+            "direita" to findViewById<LinearLayout>(R.id.slot_direita)
+        )
+
+        fun mover(bloco: View, posicao: String, margem: Int) {
+            val destino = slots[posicao] ?: slots.getValue("esquerda")
+            (bloco.parent as? ViewGroup)?.removeView(bloco)
+            val lp = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+            // so afasta do vizinho se ja houver alguem no slot
+            lp.marginStart = if (destino.childCount > 0) dp(margem) else 0
+            bloco.layoutParams = lp
+            destino.addView(bloco)
+        }
+
+        mover(findViewById(R.id.bloco_identidade), posicaoValida(cfg, "posicao_logo", "esquerda"), 0)
+        mover(findViewById(R.id.sistema_atalhos), posicaoValida(cfg, "posicao_atalhos", "esquerda"), 16)
+        mover(findViewById(R.id.relogio_container), posicaoValida(cfg, "posicao_relogio", "direita"), 16)
+    }
+
+    /** "canto" e o valor legado do painel antigo e equivale a esquerda. */
+    private fun posicaoValida(cfg: JSONObject?, chave: String, padrao: String): String =
+        when (cfg?.optString(chave, padrao) ?: padrao) {
+            "centro" -> "centro"
+            "direita" -> "direita"
+            else -> "esquerda"
+        }
+
+    private fun decodificarBase64(dataUri: String): android.graphics.Bitmap? {
+        if (dataUri.isEmpty() || !dataUri.contains("base64,")) return null
+        return try {
+            val bytes = Base64.decode(dataUri.substringAfter("base64,"), Base64.DEFAULT)
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+        } catch (_: Exception) {
+            null
         }
     }
 
@@ -286,10 +337,16 @@ class LauncherActivity : AppCompatActivity() {
             if (mostrar) View.VISIBLE else View.GONE
     }
 
-    private fun aplicarAlturaBanner(cfg: JSONObject?) {
-        val altura = cfg?.optInt("altura_banner", 160) ?: 160
+    /**
+     * Banner com tamanho FIXO em dp — sem proporcao. O painel recorta a arte
+     * exatamente nessa medida, entao a imagem nunca estica nem achata.
+     */
+    private fun aplicarTamanhoBanner(cfg: JSONObject?) {
+        val largura = (cfg?.optInt("largura_banner", 480) ?: 480).coerceIn(200, 1920)
+        val altura = (cfg?.optInt("altura_banner", 160) ?: 160).coerceIn(80, 800)
         val banner = findViewById<View>(R.id.banner_container)
         val params = banner.layoutParams
+        params.width = dp(largura)
         params.height = dp(altura)
         banner.layoutParams = params
     }
@@ -442,11 +499,13 @@ class LauncherActivity : AppCompatActivity() {
             .show()
     }
 
-    // --- Apps (grid de largura total, sem categorias) ---
+    // --- Apps (carrossel horizontal, sem categorias) ---
 
     private fun montarApps(cfg: JSONObject?) {
         val grid = findViewById<RecyclerView>(R.id.apps_grid)
-        grid.layoutManager = GridLayoutManager(this, 5)
+        // Fileira horizontal: com muitos apps a lista rola para a direita
+        // conforme o foco anda, em vez de espremer tudo numa grade fixa.
+        grid.layoutManager = LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
 
         val apps = cfg?.optJSONArray("apps") ?: return
         val lista = mutableListOf<JSONObject>()
@@ -533,40 +592,110 @@ class LauncherActivity : AppCompatActivity() {
     private fun montarBanner(cfg: JSONObject?) {
         val banners = cfg?.optJSONArray("banners")
         val placeholder = findViewById<TextView>(R.id.banner_placeholder)
-        val imagem = findViewById<ImageView>(R.id.banner_imagem)
+        val a = findViewById<ImageView>(R.id.banner_imagem_a)
+        val b = findViewById<ImageView>(R.id.banner_imagem_b)
         val overlay = findViewById<View>(R.id.banner_overlay)
+        val pontos = findViewById<LinearLayout>(R.id.banner_pontos)
+
+        // Vitrine pura: o banner nao abre app nenhum e nao pega foco.
+        findViewById<View>(R.id.banner_container).apply {
+            isFocusable = false
+            isClickable = false
+            setOnClickListener(null)
+        }
+
+        rotacaoBanner?.let { handler.removeCallbacks(it) }
+        rotacaoBanner = null
 
         if (banners == null || banners.length() == 0) {
             placeholder.visibility = View.VISIBLE
-            imagem.visibility = View.GONE
+            a.visibility = View.GONE
+            b.visibility = View.GONE
             overlay.visibility = View.GONE
+            pontos.visibility = View.GONE
             return
         }
 
-        exibirBanner(banners.getJSONObject(0))
+        placeholder.visibility = View.GONE
+        bannerIndex = 0
+        bannerNoA = false
+        montarPontos(banners.length())
+        exibirBanner(banners.getJSONObject(0), animar = false)
+        iniciarRotacaoBanner(cfg)
     }
 
-    private fun exibirBanner(banner: JSONObject) {
-        val imagem = findViewById<ImageView>(R.id.banner_imagem)
+    /** bolinhas indicando quantos banners existem e qual esta na tela */
+    private fun montarPontos(quantidade: Int) {
+        val pontos = findViewById<LinearLayout>(R.id.banner_pontos)
+        pontos.removeAllViews()
+
+        if (quantidade <= 1) {
+            pontos.visibility = View.GONE
+            return
+        }
+
+        pontos.visibility = View.VISIBLE
+        repeat(quantidade) {
+            val ponto = View(this)
+            val lp = LinearLayout.LayoutParams(dp(6), dp(6))
+            lp.marginStart = if (it > 0) dp(5) else 0
+            ponto.layoutParams = lp
+            pontos.addView(ponto)
+        }
+        pintarPontos()
+    }
+
+    private fun pintarPontos() {
+        val pontos = findViewById<LinearLayout>(R.id.banner_pontos)
+        val destaque = try {
+            Color.parseColor(config?.optJSONObject("cores")?.optString("destaque", "#00E5FF") ?: "#00E5FF")
+        } catch (_: Exception) {
+            Color.parseColor("#00E5FF")
+        }
+
+        for (i in 0 until pontos.childCount) {
+            val bg = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(if (i == bannerIndex) destaque else Color.parseColor("#60FFFFFF"))
+            }
+            pontos.getChildAt(i).background = bg
+        }
+    }
+
+    /**
+     * Troca o banner com crossfade entre duas ImageViews sobrepostas — na TV
+     * nao ha deslizar com o dedo, entao a transicao e por tempo.
+     */
+    private fun exibirBanner(banner: JSONObject, animar: Boolean) {
+        val a = findViewById<ImageView>(R.id.banner_imagem_a)
+        val b = findViewById<ImageView>(R.id.banner_imagem_b)
         val placeholder = findViewById<TextView>(R.id.banner_placeholder)
         val overlay = findViewById<View>(R.id.banner_overlay)
         val titulo = findViewById<TextView>(R.id.banner_titulo)
         val subtitulo = findViewById<TextView>(R.id.banner_subtitulo)
 
-        val imgBase64 = banner.optString("imagem", "")
-        if (imgBase64.isNotEmpty() && imgBase64.contains("base64,")) {
-            try {
-                val dados = imgBase64.substringAfter("base64,")
-                val bytes = Base64.decode(dados, Base64.DEFAULT)
-                val bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                imagem.setImageBitmap(bmp)
-                imagem.visibility = View.VISIBLE
-                placeholder.visibility = View.GONE
-            } catch (_: Exception) {
-                imagem.visibility = View.GONE
-                placeholder.visibility = View.VISIBLE
-            }
+        val bmp = decodificarBase64(banner.optString("imagem", ""))
+        if (bmp == null) {
+            placeholder.visibility = View.VISIBLE
+            return
         }
+
+        val entra = if (bannerNoA) b else a
+        val sai = if (bannerNoA) a else b
+
+        entra.setImageBitmap(bmp)
+        entra.alpha = if (animar) 0f else 1f
+        entra.visibility = View.VISIBLE
+        entra.bringToFront()
+
+        if (animar) {
+            entra.animate().alpha(1f).setDuration(450).start()
+            sai.animate().alpha(0f).setDuration(450)
+                .withEndAction { sai.visibility = View.GONE }.start()
+        } else {
+            sai.visibility = View.GONE
+        }
+        bannerNoA = !bannerNoA
 
         val tit = banner.optString("titulo", "")
         val sub = banner.optString("subtitulo", "")
@@ -574,29 +703,32 @@ class LauncherActivity : AppCompatActivity() {
             titulo.text = tit
             subtitulo.text = sub
             overlay.visibility = View.VISIBLE
+            overlay.bringToFront()
         } else {
             overlay.visibility = View.GONE
         }
 
-        val pacote = banner.optString("pacote_alvo", "")
-        val bannerContainer = findViewById<View>(R.id.banner_container)
-        if (pacote.isNotEmpty()) {
-            bannerContainer.isFocusable = true
-            bannerContainer.setOnClickListener { abrirApp(pacote) }
-        }
+        findViewById<LinearLayout>(R.id.banner_pontos).bringToFront()
+        pintarPontos()
     }
 
-    private fun iniciarBannerRotacao() {
-        handler.postDelayed(object : Runnable {
+    private fun iniciarRotacaoBanner(cfg: JSONObject?) {
+        val banners = cfg?.optJSONArray("banners") ?: return
+        if (banners.length() <= 1) return
+
+        val intervalo = ((cfg?.optInt("banner_intervalo", 8) ?: 8).coerceIn(3, 60)) * 1000L
+        val tarefa = object : Runnable {
             override fun run() {
-                val banners = config?.optJSONArray("banners")
-                if (banners != null && banners.length() > 1) {
-                    bannerIndex = (bannerIndex + 1) % banners.length()
-                    exibirBanner(banners.getJSONObject(bannerIndex))
+                val lista = config?.optJSONArray("banners")
+                if (lista != null && lista.length() > 1) {
+                    bannerIndex = (bannerIndex + 1) % lista.length()
+                    exibirBanner(lista.getJSONObject(bannerIndex), animar = true)
                 }
-                handler.postDelayed(this, 8000)
+                handler.postDelayed(this, intervalo)
             }
-        }, 8000)
+        }
+        rotacaoBanner = tarefa
+        handler.postDelayed(tarefa, intervalo)
     }
 
     private fun iniciarRelogio() {

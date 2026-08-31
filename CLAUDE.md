@@ -88,12 +88,30 @@ sozinho após o boot, sem PC**. É a "Etapa 1" que prova a arquitetura de frota.
 - `.../BootReceiver.kt` — starta o serviço no boot.
 - `.../AgentApp.kt` — handler de crash em arquivo.
 - `.../LauncherActivity.kt` — **tela inicial (HOME)** da TV. Layout vertical:
-  banner no topo (altura configuravel) + grid 5 colunas de apps abaixo.
+  barra superior + banner de tamanho fixo + carrossel horizontal de apps.
   Sem menu de categorias. Atalhos do sistema usam icones SVG (ic_wifi,
   ic_bluetooth, ic_settings). Config vem do painel via check-in e fica em
   SharedPreferences `hubtv_launcher`. Tela de bloqueio e tela de ativacao
   (mostra codigo de 8 chars gerado localmente). Suporta notificacoes do
   servidor (AlertDialog sequencial). Tecla MENU abre a MainActivity.
+  - **Barra superior em 3 slots** (`slot_esquerda`/`slot_centro`/
+    `slot_direita`, mesma largura). `reposicionarTopbar()` move os blocos
+    `bloco_identidade` (logo+nome), `sistema_atalhos` e `relogio_container`
+    para o slot que o painel mandou (`posicao_logo`, `posicao_atalhos`,
+    `posicao_relogio`). Blocos no mesmo slot ficam lado a lado.
+    O valor legado `canto` equivale a `esquerda`.
+  - **Nome escrito** so aparece se o painel mandar `exibir_nome: true`. No
+    modo automatico o painel devolve `false` quando ha logo, para nao
+    duplicar a marca.
+  - **Banner de tamanho FIXO em dp** (`largura_banner` x `altura_banner`),
+    nao proporcao. O painel ja recorta a arte exatamente nessa medida
+    (`imagemRecortada()`), entao nada estica nem achata. Carrossel com
+    crossfade entre `banner_imagem_a`/`banner_imagem_b` a cada
+    `banner_intervalo` segundos, com bolinhas indicadoras. O banner e
+    vitrine pura: nao abre app e nao pega foco.
+  - **Apps em carrossel horizontal** (LinearLayoutManager HORIZONTAL) com
+    cards de largura fixa (112dp) — antes era grid de 5 colunas, que
+    achatava os icones quando o banner crescia.
 - `.../MainActivity.kt` — UI de controle do agente (botões: Ligar depuração,
   Parear, Conectar, Testar poderes, Fixar porta 5555, Limpar). Registro na tela.
 - `.../Registro.kt` — log em memória observável, exibido na UI.
@@ -121,13 +139,18 @@ sobreviver ao desligamento total.
   pelo APK. `Comandos.kt` executa cada tipo via `Adb.shell()` e reporta o
   resultado ao painel. Auto-update: dispositivo baixa novo APK de URL e faz
   `pm install -r` sobre si mesmo.
-- **Launcher (v2 CONCLUIDO):** LauncherActivity como HOME da TV Box. Layout
-  vertical: banner (altura configuravel) + grid 5 colunas. Sem categorias.
+- **Launcher (v2 CONCLUIDO):** LauncherActivity como HOME da TV Box.
   Icones SVG profissionais (WiFi, Bluetooth, Config, Wrench). Ativacao por
   codigo de 8 chars gerado no dispositivo — revendedor ativa no painel
   consumindo credito. Notificacoes do servidor exibidas como dialogo.
-  Config do painel: posicao_logo (canto/centro), mostrar_relogio, fundo
-  customizado, altura_banner. APK upload no cadastro de apps.
+  APK upload no cadastro de apps.
+- **Launcher (v3 CONCLUIDO):** layout totalmente configuravel pelo painel.
+  Barra superior em 3 slots com posicao independente para logo, relogio e
+  atalhos do sistema; nome escrito some sozinho quando ha logo; banner com
+  tamanho fixo em dp e carrossel automatico com crossfade; apps em
+  carrossel horizontal. Campos novos no perfil: `largura_banner`,
+  `banner_intervalo`, `posicao_relogio`, `posicao_atalhos`, `exibir_nome`.
+  O banner deixou de abrir app (`pacote_alvo` saiu do JSON da API).
 - **Painel v2:** Planos, Creditos (XXXX-XXXX), Ativacao (revendedor consome
   credito com codigo do dispositivo), Central de Comandos (modelos + shell
   manual), Notificacoes (envio por dispositivo). Auto-push launcher update

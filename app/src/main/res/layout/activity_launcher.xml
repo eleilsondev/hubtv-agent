@@ -24,92 +24,141 @@
         android:orientation="vertical"
         android:padding="20dp">
 
-        <!-- TOPBAR: logo + nome + atalhos sistema + relogio -->
+        <!-- ================= TOPBAR =================
+             Tres slots de mesma largura. Cada bloco (identidade, atalhos,
+             relogio) e movido para o slot escolhido no painel em tempo de
+             execucao — ver reposicionarTopbar() na LauncherActivity. -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:gravity="center_vertical"
             android:layout_marginBottom="10dp">
 
-            <ImageView
-                android:id="@+id/logo"
-                android:layout_width="36dp"
-                android:layout_height="36dp"
-                android:scaleType="fitCenter"
-                android:visibility="gone" />
-
-            <TextView
-                android:id="@+id/nome_launcher"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="HUB TV"
-                android:textColor="#FFFFFF"
-                android:textSize="20sp"
-                android:textStyle="bold"
-                android:layout_marginStart="10dp"
-                android:shadowColor="#80000000"
-                android:shadowDx="0"
-                android:shadowDy="2"
-                android:shadowRadius="4" />
-
-            <!-- atalhos do sistema (WiFi, Bluetooth, Config) -->
             <LinearLayout
-                android:id="@+id/sistema_atalhos"
+                android:id="@+id/slot_esquerda"
                 android:layout_width="0dp"
                 android:layout_weight="1"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:layout_marginStart="16dp"
-                android:layout_marginEnd="16dp" />
+                android:gravity="start|center_vertical">
 
-            <!-- status conexao -->
-            <View
-                android:id="@+id/indicador_status"
-                android:layout_width="8dp"
-                android:layout_height="8dp"
-                android:layout_marginEnd="8dp"
-                android:background="@drawable/circulo_verde" />
+                <!-- bloco identidade: logo + nome -->
+                <LinearLayout
+                    android:id="@+id/bloco_identidade"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
 
-            <!-- data e hora -->
+                    <ImageView
+                        android:id="@+id/logo"
+                        android:layout_width="wrap_content"
+                        android:layout_height="36dp"
+                        android:adjustViewBounds="true"
+                        android:scaleType="fitCenter"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/nome_launcher"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="HUB TV"
+                        android:textColor="#FFFFFF"
+                        android:textSize="20sp"
+                        android:textStyle="bold"
+                        android:singleLine="true"
+                        android:layout_marginStart="10dp"
+                        android:shadowColor="#80000000"
+                        android:shadowDx="0"
+                        android:shadowDy="2"
+                        android:shadowRadius="4" />
+                </LinearLayout>
+
+                <!-- bloco atalhos do sistema (WiFi, Bluetooth, Config) -->
+                <LinearLayout
+                    android:id="@+id/sistema_atalhos"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginStart="16dp" />
+            </LinearLayout>
+
             <LinearLayout
-                android:id="@+id/relogio_container"
-                android:layout_width="wrap_content"
+                android:id="@+id/slot_centro"
+                android:layout_width="0dp"
+                android:layout_weight="1"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
-                android:gravity="center_vertical">
+                android:gravity="center" />
 
-                <TextView
-                    android:id="@+id/relogio"
+            <LinearLayout
+                android:id="@+id/slot_direita"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="end|center_vertical">
+
+                <!-- bloco relogio: indicador + hora + vencimento -->
+                <LinearLayout
+                    android:id="@+id/relogio_container"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:textColor="#B0FFFFFF"
-                    android:textSize="16sp"
-                    android:fontFamily="sans-serif-light" />
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
 
-                <TextView
-                    android:id="@+id/data"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:textColor="#70FFFFFF"
-                    android:textSize="12sp"
-                    android:layout_marginStart="10dp" />
+                    <View
+                        android:id="@+id/indicador_status"
+                        android:layout_width="8dp"
+                        android:layout_height="8dp"
+                        android:layout_marginEnd="8dp"
+                        android:background="@drawable/circulo_verde" />
+
+                    <TextView
+                        android:id="@+id/relogio"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textColor="#B0FFFFFF"
+                        android:textSize="16sp"
+                        android:fontFamily="sans-serif-light" />
+
+                    <TextView
+                        android:id="@+id/data"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textColor="#70FFFFFF"
+                        android:textSize="12sp"
+                        android:singleLine="true"
+                        android:layout_marginStart="10dp" />
+                </LinearLayout>
             </LinearLayout>
         </LinearLayout>
 
-        <!-- BANNER (altura configuravel) -->
+        <!-- ================= BANNER =================
+             Tamanho FIXO em dp, definido no painel (largura_banner x
+             altura_banner). Nao usa proporcao: o painel ja recorta a arte
+             exatamente nessa medida, entao nada estica nem achata.
+             Duas ImageViews sobrepostas fazem o crossfade do carrossel. -->
         <FrameLayout
             android:id="@+id/banner_container"
-            android:layout_width="match_parent"
+            android:layout_width="480dp"
             android:layout_height="160dp"
+            android:layout_gravity="center_horizontal"
             android:background="@drawable/card_bg"
             android:clipChildren="true"
             android:clipToPadding="true"
             android:layout_marginBottom="10dp">
 
             <ImageView
-                android:id="@+id/banner_imagem"
+                android:id="@+id/banner_imagem_a"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:scaleType="centerCrop"
+                android:visibility="gone" />
+
+            <ImageView
+                android:id="@+id/banner_imagem_b"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:scaleType="centerCrop"
@@ -145,6 +194,16 @@
                     android:layout_marginTop="2dp" />
             </LinearLayout>
 
+            <!-- bolinhas do carrossel -->
+            <LinearLayout
+                android:id="@+id/banner_pontos"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom|center_horizontal"
+                android:orientation="horizontal"
+                android:layout_marginBottom="8dp"
+                android:visibility="gone" />
+
             <!-- placeholder quando sem banner -->
             <TextView
                 android:id="@+id/banner_placeholder"
@@ -157,14 +216,22 @@
                 android:textStyle="bold" />
         </FrameLayout>
 
-        <!-- GRID DE APPS (ocupa todo o espaco restante) -->
+        <!-- ================= CARROSSEL DE APPS =================
+             Fileira horizontal de cards de largura fixa. Com muitos apps a
+             lista rola para a direita conforme o foco anda, em vez de
+             espremer tudo numa grade. -->
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/apps_grid"
             android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="1"
+            android:layout_height="wrap_content"
             android:clipToPadding="false"
-            android:padding="4dp" />
+            android:padding="6dp" />
+
+        <!-- empurra a barra inferior para baixo -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
 
         <!-- BARRA INFERIOR: atalhos rapidos de apps -->
         <LinearLayout
