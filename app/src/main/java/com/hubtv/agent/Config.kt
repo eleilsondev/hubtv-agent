@@ -31,12 +31,34 @@ object Config {
         prefs(context).edit().putString(K_CODIGO, codigo).apply()
     }
 
+    /**
+     * Codigo de ativacao DERIVADO do aparelho, nao sorteado.
+     *
+     * Antes era aleatorio e guardado em SharedPreferences: reinstalar o app
+     * apagava as prefs e o aparelho aparecia no painel como se fosse outro,
+     * quebrando a renovacao. Agora sai de um hash do ANDROID_ID — o mesmo
+     * aparelho sempre devolve o mesmo codigo, mesmo apos reinstalar ou
+     * limpar os dados.
+     *
+     * Depende da assinatura do APK ser estavel (o ANDROID_ID e derivado dela);
+     * ver a chave fixa em app/build.gradle.kts.
+     */
     fun codigoAtivacao(context: Context): String {
-        val existente = prefs(context).getString(K_CODIGO_ATIVACAO, null)
-        if (!existente.isNullOrBlank()) return existente
+        val alfabeto = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789" // sem I, O, 0 e 1
+        val id = idDispositivo(context)
 
-        val chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-        val codigo = (1..8).map { chars.random() }.joinToString("")
+        val codigo = try {
+            val hash = java.security.MessageDigest.getInstance("SHA-256")
+                .digest("hubtv:$id".toByteArray(Charsets.UTF_8))
+            buildString {
+                for (i in 0 until 8) append(alfabeto[(hash[i].toInt() and 0xFF) % alfabeto.length])
+            }
+        } catch (_: Exception) {
+            // fallback: mantem o que ja estava guardado, se houver
+            prefs(context).getString(K_CODIGO_ATIVACAO, null)
+                ?: (1..8).map { alfabeto.random() }.joinToString("")
+        }
+
         prefs(context).edit().putString(K_CODIGO_ATIVACAO, codigo).apply()
         return codigo
     }

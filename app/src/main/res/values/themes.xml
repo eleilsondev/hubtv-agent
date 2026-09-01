@@ -8,6 +8,20 @@
         <item name="android:navigationBarColor">@color/fundo</item>
     </style>
 
+    <!-- Botao de largura cheia para navegacao por D-pad: alvo grande, uma
+         acao por linha, e altura suficiente para o realce de foco aparecer
+         de longe na TV. -->
+    <style name="BotaoTv" parent="Widget.Material3.Button">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:minHeight">52dp</item>
+        <item name="android:textSize">15sp</item>
+        <item name="android:gravity">center_vertical|start</item>
+        <item name="android:paddingStart">20dp</item>
+        <item name="android:paddingEnd">20dp</item>
+        <item name="android:layout_marginBottom">8dp</item>
+    </style>
+
     <style name="Rotulo">
         <item name="android:layout_width">wrap_content</item>
         <item name="android:layout_height">wrap_content</item>

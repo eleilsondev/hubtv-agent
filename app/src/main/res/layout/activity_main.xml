@@ -1,17 +1,31 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Layout pensado para CONTROLE REMOTO, nao para toque.
+
+  Duas colunas: a esquerda so tem acoes, numa unica fila vertical — o D-pad
+  desce de botao em botao sem surpresa. A direita e leitura: status e registro.
+
+  O registro tem focusable=false + blocksDescendants de proposito. Antes ele
+  era selecionavel, entao o foco caia dentro do texto e o cursor andava linha
+  a linha ate o fim do log; voltar levava uma eternidade. Nada la e clicavel.
+-->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:background="@color/fundo"
-    android:padding="24dp">
+    android:paddingStart="28dp"
+    android:paddingEnd="28dp"
+    android:paddingTop="20dp"
+    android:paddingBottom="20dp">
 
-    <!-- cabecalho -->
+    <!-- ===================== CABECALHO ===================== -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:gravity="center_vertical">
+        android:gravity="center_vertical"
+        android:layout_marginBottom="16dp">
 
         <LinearLayout
             android:layout_width="0dp"
@@ -24,7 +38,7 @@
                 android:layout_height="wrap_content"
                 android:text="@string/app_name"
                 android:textColor="@color/texto"
-                android:textSize="22sp"
+                android:textSize="24sp"
                 android:textStyle="bold" />
 
             <TextView
@@ -35,220 +49,244 @@
                 android:textSize="13sp" />
         </LinearLayout>
 
-        <LinearLayout
+        <TextView
+            android:id="@+id/estado_depuracao"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:gravity="end">
-
-            <TextView
-                android:id="@+id/estado_depuracao"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/verificando"
-                android:textSize="13sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/estado_conexao"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/verificando"
-                android:textSize="13sp"
-                android:textStyle="bold" />
-        </LinearLayout>
-    </LinearLayout>
-
-    <View
-        android:layout_width="match_parent"
-        android:layout_height="1dp"
-        android:layout_marginTop="16dp"
-        android:layout_marginBottom="16dp"
-        android:background="@color/borda" />
-
-    <!-- passo 1: pareamento -->
-    <TextView
-        style="@style/Rotulo"
-        android:text="@string/passo_parear" />
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:layout_marginTop="8dp">
-
-        <EditText
-            android:id="@+id/campo_porta"
-            android:layout_width="0dp"
-            android:layout_weight="1"
-            android:layout_height="wrap_content"
-            android:hint="@string/porta"
-            android:inputType="number"
-            android:importantForAutofill="no"
-            android:textColor="@color/texto"
-            android:textColorHint="@color/fraco" />
-
-        <EditText
-            android:id="@+id/campo_codigo"
-            android:layout_width="0dp"
-            android:layout_weight="1"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
-            android:hint="@string/codigo"
-            android:inputType="number"
-            android:maxLength="6"
-            android:importantForAutofill="no"
-            android:textColor="@color/texto"
-            android:textColorHint="@color/fraco" />
-
-        <Button
-            android:id="@+id/btn_parear"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
-            android:text="@string/parear" />
-    </LinearLayout>
-
-    <!-- passo 2: acoes -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:layout_marginTop="14dp">
-
-        <Button
-            android:id="@+id/btn_ligar_depuracao"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/ligar_depuracao" />
-
-        <Button
-            android:id="@+id/btn_conectar"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
-            android:text="@string/conectar" />
-
-        <Button
-            android:id="@+id/btn_testar"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
-            android:text="@string/testar" />
-
-        <Button
-            android:id="@+id/btn_fixar_porta"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
-            android:text="@string/fixar_porta" />
-
-        <ProgressBar
-            android:id="@+id/progresso"
-            android:layout_width="26dp"
-            android:layout_height="26dp"
-            android:layout_gravity="center_vertical"
-            android:layout_marginStart="14dp"
-            android:visibility="invisible" />
-    </LinearLayout>
-
-    <!-- inscricao com codigo -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:layout_marginTop="14dp"
-        android:gravity="center_vertical">
-
-        <EditText
-            android:id="@+id/campo_codigo_inscricao"
-            android:layout_width="0dp"
-            android:layout_weight="1"
-            android:layout_height="wrap_content"
-            android:hint="@string/codigo_inscricao"
-            android:inputType="textCapCharacters"
-            android:maxLength="8"
-            android:importantForAutofill="no"
-            android:textColor="@color/texto"
-            android:textColorHint="@color/fraco"
-            android:textSize="18sp"
-            android:letterSpacing="0.15"
-            android:enabled="false" />
-
-        <Button
-            android:id="@+id/btn_inscrever"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
-            android:text="@string/inscrever" />
-
-        <Button
-            android:id="@+id/btn_checkin"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
-            android:text="@string/checkin" />
-    </LinearLayout>
-
-    <!-- botao para entrar no modo launcher -->
-    <Button
-        android:id="@+id/btn_launcher"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="14dp"
-        android:text="@string/entrar_launcher"
-        android:backgroundTint="#1565C0"
-        android:textColor="#FFFFFF"
-        android:textStyle="bold" />
-
-    <!-- registro -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:layout_marginTop="12dp">
+            android:text="@string/verificando"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:layout_marginEnd="16dp" />
 
         <TextView
-            style="@style/Rotulo"
-            android:layout_width="0dp"
-            android:layout_weight="1"
-            android:text="@string/registro" />
-
-        <Button
-            android:id="@+id/btn_diagnostico"
+            android:id="@+id/estado_conexao"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:minWidth="0dp"
-            android:text="Diagnostico"
-            android:textSize="12sp"
-            android:layout_marginEnd="8dp" />
-
-        <Button
-            android:id="@+id/btn_limpar"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:minWidth="0dp"
-            android:text="@string/limpar"
-            android:textSize="12sp" />
+            android:text="@string/verificando"
+            android:textSize="13sp"
+            android:textStyle="bold" />
     </LinearLayout>
 
-    <ScrollView
-        android:id="@+id/rolagem"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:layout_marginTop="8dp"
-        android:background="@color/painel"
-        android:padding="14dp">
+        android:orientation="horizontal">
 
-        <TextView
-            android:id="@+id/registro"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:fontFamily="monospace"
-            android:textColor="@color/suave"
-            android:textSize="12sp"
-            android:textIsSelectable="true" />
-    </ScrollView>
+        <!-- ============ COLUNA DAS ACOES (o D-pad vive aqui) ============ -->
+        <ScrollView
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="match_parent"
+            android:scrollbars="none">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <TextView
+                    style="@style/Rotulo"
+                    android:text="1. PREPARAR O ADB"
+                    android:layout_marginBottom="8dp" />
+
+                <!-- o foco comeca aqui: e a primeira acao do fluxo -->
+                <Button
+                    android:id="@+id/btn_conectar"
+                    style="@style/BotaoTv"
+                    android:text="@string/conectar">
+                    <requestFocus />
+                </Button>
+
+                <Button
+                    android:id="@+id/btn_fixar_porta"
+                    style="@style/BotaoTv"
+                    android:text="@string/fixar_porta" />
+
+                <Button
+                    android:id="@+id/btn_ligar_depuracao"
+                    style="@style/BotaoTv"
+                    android:text="@string/ligar_depuracao" />
+
+                <Button
+                    android:id="@+id/btn_testar"
+                    style="@style/BotaoTv"
+                    android:text="@string/testar" />
+
+                <TextView
+                    style="@style/Rotulo"
+                    android:text="2. REGISTRAR NO PAINEL"
+                    android:layout_marginTop="20dp"
+                    android:layout_marginBottom="8dp" />
+
+                <!-- codigo do aparelho: mostrado grande, nunca editavel -->
+                <TextView
+                    android:id="@+id/campo_codigo_inscricao"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="@color/painel"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp"
+                    android:paddingTop="12dp"
+                    android:paddingBottom="12dp"
+                    android:textColor="@color/accent"
+                    android:textSize="26sp"
+                    android:textStyle="bold"
+                    android:letterSpacing="0.25"
+                    android:gravity="center"
+                    android:fontFamily="monospace"
+                    android:focusable="false" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Informe este codigo ao revendedor. Ele nao muda."
+                    android:textColor="@color/fraco"
+                    android:textSize="12sp"
+                    android:gravity="center"
+                    android:layout_marginTop="6dp"
+                    android:layout_marginBottom="10dp" />
+
+                <Button
+                    android:id="@+id/btn_inscrever"
+                    style="@style/BotaoTv"
+                    android:text="@string/inscrever" />
+
+                <Button
+                    android:id="@+id/btn_checkin"
+                    style="@style/BotaoTv"
+                    android:text="@string/checkin" />
+
+                <TextView
+                    style="@style/Rotulo"
+                    android:text="3. USAR"
+                    android:layout_marginTop="20dp"
+                    android:layout_marginBottom="8dp" />
+
+                <Button
+                    android:id="@+id/btn_launcher"
+                    style="@style/BotaoTv"
+                    android:text="@string/entrar_launcher" />
+
+                <Button
+                    android:id="@+id/btn_diagnostico"
+                    style="@style/BotaoTv"
+                    android:text="Diagnostico" />
+
+                <TextView
+                    style="@style/Rotulo"
+                    android:text="PAREAMENTO (so se CONECTAR falhar)"
+                    android:layout_marginTop="20dp"
+                    android:layout_marginBottom="8dp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <EditText
+                        android:id="@+id/campo_porta"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:layout_height="wrap_content"
+                        android:hint="@string/porta"
+                        android:inputType="number"
+                        android:textColor="@color/texto"
+                        android:textColorHint="@color/fraco"
+                        android:layout_marginEnd="8dp"
+                        android:importantForAutofill="no" />
+
+                    <EditText
+                        android:id="@+id/campo_codigo"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:layout_height="wrap_content"
+                        android:hint="@string/codigo"
+                        android:inputType="number"
+                        android:textColor="@color/texto"
+                        android:textColorHint="@color/fraco"
+                        android:layout_marginEnd="8dp"
+                        android:importantForAutofill="no" />
+
+                    <Button
+                        android:id="@+id/btn_parear"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/parear" />
+                </LinearLayout>
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/passo_parear"
+                    android:textColor="@color/fraco"
+                    android:textSize="11sp"
+                    android:layout_marginTop="8dp"
+                    android:layout_marginBottom="20dp" />
+            </LinearLayout>
+        </ScrollView>
+
+        <!-- ============ COLUNA DE LEITURA (fora do caminho do foco) ====== -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:layout_marginStart="24dp">
+
+            <ProgressBar
+                android:id="@+id/progresso"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="match_parent"
+                android:layout_height="4dp"
+                android:indeterminate="true"
+                android:visibility="invisible"
+                android:layout_marginBottom="10dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="8dp">
+
+                <TextView
+                    style="@style/Rotulo"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:text="@string/registro" />
+
+                <Button
+                    android:id="@+id/btn_limpar"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minWidth="0dp"
+                    android:text="@string/limpar"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <!-- Leitura apenas: o D-pad NAO entra aqui. -->
+            <ScrollView
+                android:id="@+id/rolagem"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:background="@color/painel"
+                android:padding="14dp"
+                android:focusable="false"
+                android:descendantFocusability="blocksDescendants"
+                android:scrollbars="vertical">
+
+                <TextView
+                    android:id="@+id/registro"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="monospace"
+                    android:textColor="@color/suave"
+                    android:textSize="12sp"
+                    android:focusable="false"
+                    android:textIsSelectable="false" />
+            </ScrollView>
+        </LinearLayout>
+    </LinearLayout>
 </LinearLayout>

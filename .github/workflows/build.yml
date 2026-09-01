@@ -32,6 +32,22 @@ jobs:
       - name: Gerar o Gradle wrapper
         run: gradle wrapper --gradle-version 8.7
 
+      # Sem esta chave o Gradle assina cada build com uma debug.keystore
+      # diferente: o ANDROID_ID muda, o painel cadastra um aparelho novo a
+      # cada instalacao e o `pm install -r` falha por assinatura incompativel.
+      - name: Aplicar a chave de assinatura fixa
+        env:
+          CHAVE: ${{ secrets.HUBTV_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$CHAVE" ]; then
+            echo "$CHAVE" | base64 -d > app/hubtv-assinatura.p12
+            echo "chave fixa aplicada ($(stat -c%s app/hubtv-assinatura.p12) bytes)"
+          else
+            echo "AVISO: secret HUBTV_KEYSTORE_BASE64 ausente."
+            echo "Esta build sai com assinatura temporaria: o aparelho vai"
+            echo "trocar de codigo de ativacao e nao aceitara update no lugar."
+          fi
+
       - name: Compilar o APK de debug
         run: ./gradlew assembleDebug --no-daemon --stacktrace
         env:

@@ -9,3 +9,8 @@
 .externalNativeBuild/
 .cxx/
 *.apk
+
+# chave de assinatura: entra pelo secret HUBTV_KEYSTORE_BASE64, nunca no repo
+*.p12
+*.jks
+*.keystore
