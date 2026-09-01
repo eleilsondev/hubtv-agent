@@ -43,6 +43,7 @@ class LauncherActivity : AppCompatActivity() {
     /** qual das duas ImageViews do banner esta na frente (crossfade) */
     private var bannerNoA = false
     private var rotacaoBanner: Runnable? = null
+    private var instalando = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -87,7 +88,7 @@ class LauncherActivity : AppCompatActivity() {
         if (!Config.inscrito(this)) return
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                CheckIn.pulso(this@LauncherActivity)
+                CheckIn.sincronizar(this@LauncherActivity)
             } catch (_: Exception) {}
             handler.post {
                 config = carregarConfig()
@@ -118,7 +119,7 @@ class LauncherActivity : AppCompatActivity() {
     }
 
     private fun abrirConfigAdb() {
-        val senha = config?.optString("senha_config", "") ?: ""
+        val senha = config?.texto("senha_config", "") ?: ""
         if (senha.isNotEmpty()) {
             pedirSenha(senha) {
                 startActivity(Intent(this, MainActivity::class.java))
@@ -144,7 +145,7 @@ class LauncherActivity : AppCompatActivity() {
 
             if (!Config.inscrito(this)) {
                 CoroutineScope(Dispatchers.IO).launch {
-                    try { CheckIn.pulso(this@LauncherActivity) } catch (_: Exception) {}
+                    try { CheckIn.sincronizar(this@LauncherActivity) } catch (_: Exception) {}
                     handler.post { verificarAtivacao() }
                 }
             }
@@ -164,8 +165,8 @@ class LauncherActivity : AppCompatActivity() {
         if (notificacoes.length() == 0) return
 
         val n = notificacoes.getJSONObject(0)
-        val titulo = n.optString("titulo", "Notificacao")
-        val mensagem = n.optString("mensagem", "")
+        val titulo = n.texto("titulo", "Notificacao")
+        val mensagem = n.texto("mensagem", "")
         val id = n.optInt("id", 0)
 
         AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
@@ -197,7 +198,7 @@ class LauncherActivity : AppCompatActivity() {
 
     private fun aplicarConfig() {
         val cfg = config
-        val nome = cfg?.optString("nome", "HUB TV") ?: "HUB TV"
+        val nome = cfg?.texto("nome", "HUB TV") ?: "HUB TV"
 
         findViewById<TextView>(R.id.nome_launcher).text = nome
         findViewById<TextView>(R.id.banner_placeholder).text = nome
@@ -210,13 +211,13 @@ class LauncherActivity : AppCompatActivity() {
         montarAtalhosDoSistema(cfg)
         reposicionarTopbar(cfg)
         montarApps(cfg)
+        montarDestaques(cfg)
         montarAtalhosApps(cfg)
         montarBanner(cfg)
 
         val prefs = getSharedPreferences("hubtv_agente", MODE_PRIVATE)
         bloqueado = prefs.getBoolean("bloqueado", false)
-        findViewById<View>(R.id.tela_bloqueio).visibility =
-            if (bloqueado) View.VISIBLE else View.GONE
+        montarTelaBloqueio(cfg, prefs.getString("expira_em", "") ?: "")
 
         val conectado = try { Adb.conectado(this) } catch (_: Exception) { false }
         val indicador = findViewById<View>(R.id.indicador_status)
@@ -228,8 +229,8 @@ class LauncherActivity : AppCompatActivity() {
 
     private fun aplicarCores(cfg: JSONObject?) {
         val cores = cfg?.optJSONObject("cores")
-        val primaria = cores?.optString("primaria", "#1a237e") ?: "#1a237e"
-        val secundaria = cores?.optString("secundaria", "#0d47a1") ?: "#0d47a1"
+        val primaria = cores?.texto("primaria", "#1a237e") ?: "#1a237e"
+        val secundaria = cores?.texto("secundaria", "#0d47a1") ?: "#0d47a1"
 
         try {
             val gradiente = GradientDrawable(
@@ -241,7 +242,7 @@ class LauncherActivity : AppCompatActivity() {
     }
 
     private fun aplicarFundo(cfg: JSONObject?) {
-        val fundoBase64 = cfg?.optString("fundo", "") ?: ""
+        val fundoBase64 = cfg?.texto("fundo", "") ?: ""
         val fundoView = findViewById<ImageView>(R.id.fundo_imagem)
 
         if (fundoBase64.isNotEmpty() && fundoBase64.contains("base64,")) {
@@ -265,7 +266,7 @@ class LauncherActivity : AppCompatActivity() {
         val logoView = findViewById<ImageView>(R.id.logo)
         val nomeView = findViewById<TextView>(R.id.nome_launcher)
 
-        val logo = decodificarBase64(cfg?.optString("logo", "") ?: "")
+        val logo = decodificarBase64(cfg?.texto("logo", "") ?: "")
         if (logo != null) {
             logoView.setImageBitmap(logo)
             logoView.visibility = View.VISIBLE
@@ -315,7 +316,7 @@ class LauncherActivity : AppCompatActivity() {
 
     /** "canto" e o valor legado do painel antigo e equivale a esquerda. */
     private fun posicaoValida(cfg: JSONObject?, chave: String, padrao: String): String =
-        when (cfg?.optString(chave, padrao) ?: padrao) {
+        when (cfg?.texto(chave, padrao) ?: padrao) {
             "centro" -> "centro"
             "direita" -> "direita"
             else -> "esquerda"
@@ -342,12 +343,22 @@ class LauncherActivity : AppCompatActivity() {
      * exatamente nessa medida, entao a imagem nunca estica nem achata.
      */
     private fun aplicarTamanhoBanner(cfg: JSONObject?) {
-        val largura = (cfg?.optInt("largura_banner", 480) ?: 480).coerceIn(200, 1920)
-        val altura = (cfg?.optInt("altura_banner", 160) ?: 160).coerceIn(80, 800)
+        val larguraPedida = (cfg?.optInt("largura_banner", 480) ?: 480).coerceIn(200, 1920)
+        val alturaPedida = (cfg?.optInt("altura_banner", 160) ?: 160).coerceIn(80, 800)
+
+        val telaLargura = resources.displayMetrics.widthPixels
+        val telaAltura = resources.displayMetrics.heightPixels
+
+        // Travas de seguranca: um banner configurado grande demais espremia a
+        // fileira de apps a ponto de sumir com os nomes. Sobra sempre metade
+        // da tela para o resto, e espaco lateral para a coluna de destaques.
+        val alturaMax = (telaAltura * 0.45f).toInt()
+        val larguraMax = telaLargura - dp(40) - dp(230)
+
         val banner = findViewById<View>(R.id.banner_container)
         val params = banner.layoutParams
-        params.width = dp(largura)
-        params.height = dp(altura)
+        params.width = minOf(dp(larguraPedida), maxOf(larguraMax, dp(200)))
+        params.height = minOf(dp(alturaPedida), alturaMax)
         banner.layoutParams = params
     }
 
@@ -383,9 +394,9 @@ class LauncherActivity : AppCompatActivity() {
             (0 until atalhos.length()).map { i ->
                 val a = atalhos.getJSONObject(i)
                 AtalhoSistema(
-                    a.optString("icone", "settings"),
-                    a.optString("nome", "Config"),
-                    a.optString("intent", "android.settings.SETTINGS"),
+                    a.texto("icone", "settings"),
+                    a.texto("nome", "Config"),
+                    a.texto("intent", "android.settings.SETTINGS"),
                     a.optBoolean("senha", false)
                 )
             }
@@ -397,7 +408,7 @@ class LauncherActivity : AppCompatActivity() {
             )
         }
 
-        val senhaGlobal = cfg?.optString("senha_config", "") ?: ""
+        val senhaGlobal = cfg?.texto("senha_config", "") ?: ""
 
         for (atalho in lista) {
             val btn = LinearLayout(this).apply {
@@ -499,6 +510,54 @@ class LauncherActivity : AppCompatActivity() {
             .show()
     }
 
+    // --- Tela de bloqueio (licenca vencida) ---
+
+    private fun montarTelaBloqueio(cfg: JSONObject?, expiraEm: String) {
+        val tela = findViewById<View>(R.id.tela_bloqueio)
+        tela.visibility = if (bloqueado) View.VISIBLE else View.GONE
+        if (!bloqueado) return
+
+        // A mesma logo do topo, para o cliente reconhecer de quem comprou.
+        val logoView = findViewById<ImageView>(R.id.bloqueio_logo)
+        val logo = decodificarBase64(cfg?.texto("logo") ?: "")
+        if (logo != null) {
+            logoView.setImageBitmap(logo)
+            logoView.visibility = View.VISIBLE
+        } else {
+            logoView.visibility = View.GONE
+        }
+
+        val mensagem = cfg?.texto("mensagem_bloqueio") ?: ""
+        if (mensagem.isNotEmpty()) {
+            findViewById<TextView>(R.id.bloqueio_mensagem).text = mensagem
+        }
+
+        val contato = cfg?.texto("contato_suporte") ?: ""
+        val card = findViewById<View>(R.id.bloqueio_contato_card)
+        if (contato.isNotEmpty()) {
+            findViewById<TextView>(R.id.bloqueio_contato).text = contato
+            card.visibility = View.VISIBLE
+        } else {
+            card.visibility = View.GONE
+        }
+
+        val venceu = findViewById<TextView>(R.id.bloqueio_venceu_em)
+        val data = dataBonita(expiraEm)
+        if (data.isNotEmpty()) {
+            venceu.text = "Assinatura vencida em $data"
+            venceu.visibility = View.VISIBLE
+        } else {
+            venceu.visibility = View.GONE
+        }
+    }
+
+    /** "2026-09-01" -> "01/09/2026". Devolve vazio se nao der para ler. */
+    private fun dataBonita(iso: String): String {
+        if (iso.isBlank()) return ""
+        val p = iso.take(10).split("-")
+        return if (p.size == 3) "${p[2]}/${p[1]}/${p[0]}" else iso
+    }
+
     // --- Apps (carrossel horizontal, sem categorias) ---
 
     private fun montarApps(cfg: JSONObject?) {
@@ -510,14 +569,125 @@ class LauncherActivity : AppCompatActivity() {
         val apps = cfg?.optJSONArray("apps") ?: return
         val lista = mutableListOf<JSONObject>()
 
+        // "atalho" vai para a barra de baixo e "destaque" para o lado do
+        // banner — no carrossel fica so o tipo "app".
         for (i in 0 until apps.length()) {
             val app = apps.getJSONObject(i)
-            if (app.optString("tipo") != "atalho") {
+            val tipo = app.texto("tipo", "app")
+            if (tipo != "atalho" && tipo != "destaque") {
                 lista.add(app)
             }
         }
 
         grid.adapter = AppAdapter(this, lista, cfg)
+    }
+
+    // --- Destaques (ate 2, empilhados ao lado do banner) ---
+
+    private fun montarDestaques(cfg: JSONObject?) {
+        val container = findViewById<LinearLayout>(R.id.destaques_container)
+        container.removeAllViews()
+
+        val apps = cfg?.optJSONArray("apps") ?: return
+        val destaques = mutableListOf<JSONObject>()
+        for (i in 0 until apps.length()) {
+            val app = apps.getJSONObject(i)
+            if (app.texto("tipo", "app") == "destaque") destaques.add(app)
+        }
+
+        val lista = destaques.take(2)
+        container.visibility = if (lista.isEmpty()) View.GONE else View.VISIBLE
+        if (lista.isEmpty()) return
+
+        for ((indice, app) in lista.withIndex()) {
+            val card = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = android.view.Gravity.CENTER_VERTICAL
+                setPadding(dp(14), dp(10), dp(14), dp(10))
+                setBackgroundResource(R.drawable.destaque_bg)
+                isFocusable = true
+                isFocusableInTouchMode = true
+
+                setOnFocusChangeListener { v, tem ->
+                    v.setBackgroundResource(
+                        if (tem) R.drawable.destaque_bg_focused else R.drawable.destaque_bg
+                    )
+                }
+                setOnClickListener { abrirApp(app) }
+            }
+
+            card.addView(iconeDoApp(app, dp(44), 20f))
+
+            val textos = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                val lp = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                lp.marginStart = dp(12)
+                layoutParams = lp
+            }
+            textos.addView(TextView(this).apply {
+                text = app.texto("nome", "App")
+                setTextColor(Color.WHITE)
+                textSize = 16f
+                setTypeface(typeface, android.graphics.Typeface.BOLD)
+                setSingleLine(true)
+                ellipsize = android.text.TextUtils.TruncateAt.END
+            })
+            textos.addView(TextView(this).apply {
+                text = if (instalado(app.texto("pacote"))) "Abrir" else "Instalar"
+                setTextColor(Color.parseColor("#80FFFFFF"))
+                textSize = 12f
+            })
+            card.addView(textos)
+
+            val lp = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
+            )
+            lp.topMargin = if (indice > 0) dp(12) else 0
+            container.addView(card, lp)
+        }
+    }
+
+    private fun instalado(pacote: String): Boolean = try {
+        pacote.isNotEmpty() && packageManager.getLaunchIntentForPackage(pacote) != null
+    } catch (_: Exception) {
+        false
+    }
+
+    /**
+     * Icone do app na ordem: imagem do painel > icone instalado no aparelho >
+     * circulo neutro com a inicial. Nunca um quadrado colorido.
+     */
+    private fun iconeDoApp(app: JSONObject, lado: Int, tamanhoLetra: Float): View {
+        val bmp = decodificarBase64(app.texto("icone"))
+        if (bmp != null) {
+            return ImageView(this).apply {
+                setImageBitmap(bmp)
+                layoutParams = LinearLayout.LayoutParams(lado, lado)
+                scaleType = ImageView.ScaleType.FIT_CENTER
+            }
+        }
+
+        try {
+            val doSistema = packageManager.getApplicationIcon(app.texto("pacote"))
+            return ImageView(this).apply {
+                setImageDrawable(doSistema)
+                layoutParams = LinearLayout.LayoutParams(lado, lado)
+                scaleType = ImageView.ScaleType.FIT_CENTER
+            }
+        } catch (_: Exception) {
+        }
+
+        return TextView(this).apply {
+            text = app.texto("nome", "?").take(1).uppercase()
+            setTextColor(Color.WHITE)
+            textSize = tamanhoLetra
+            gravity = android.view.Gravity.CENTER
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Color.parseColor("#33FFFFFF"))
+            }
+            layoutParams = LinearLayout.LayoutParams(lado, lado)
+        }
     }
 
     // --- Atalhos de apps (barra inferior) ---
@@ -530,7 +700,7 @@ class LauncherActivity : AppCompatActivity() {
 
         for (i in 0 until apps.length()) {
             val app = apps.getJSONObject(i)
-            if (app.optString("tipo") != "atalho") continue
+            if (app.texto("tipo") != "atalho") continue
 
             val view = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
@@ -547,11 +717,10 @@ class LauncherActivity : AppCompatActivity() {
                     else v.animate().scaleX(1f).scaleY(1f).setDuration(100).start()
                 }
 
-                val pacote = app.optString("pacote", "")
-                setOnClickListener { abrirApp(pacote) }
+                setOnClickListener { abrirApp(app) }
             }
 
-            val iconeBase64 = app.optString("icone", "")
+            val iconeBase64 = app.texto("icone", "")
             if (iconeBase64.isNotEmpty() && iconeBase64.contains("base64,")) {
                 try {
                     val dados = iconeBase64.substringAfter("base64,")
@@ -571,7 +740,7 @@ class LauncherActivity : AppCompatActivity() {
             }
 
             val nome = TextView(this).apply {
-                text = app.optString("nome", "App")
+                text = app.texto("nome", "App")
                 setTextColor(Color.WHITE)
                 textSize = 12f
                 setPadding(dp(8), 0, 0, 0)
@@ -648,7 +817,7 @@ class LauncherActivity : AppCompatActivity() {
     private fun pintarPontos() {
         val pontos = findViewById<LinearLayout>(R.id.banner_pontos)
         val destaque = try {
-            Color.parseColor(config?.optJSONObject("cores")?.optString("destaque", "#00E5FF") ?: "#00E5FF")
+            Color.parseColor(config?.optJSONObject("cores")?.texto("destaque", "#00E5FF") ?: "#00E5FF")
         } catch (_: Exception) {
             Color.parseColor("#00E5FF")
         }
@@ -674,7 +843,7 @@ class LauncherActivity : AppCompatActivity() {
         val titulo = findViewById<TextView>(R.id.banner_titulo)
         val subtitulo = findViewById<TextView>(R.id.banner_subtitulo)
 
-        val bmp = decodificarBase64(banner.optString("imagem", ""))
+        val bmp = decodificarBase64(banner.texto("imagem", ""))
         if (bmp == null) {
             placeholder.visibility = View.VISIBLE
             return
@@ -697,8 +866,8 @@ class LauncherActivity : AppCompatActivity() {
         }
         bannerNoA = !bannerNoA
 
-        val tit = banner.optString("titulo", "")
-        val sub = banner.optString("subtitulo", "")
+        val tit = banner.texto("titulo", "")
+        val sub = banner.texto("subtitulo", "")
         if (tit.isNotEmpty() || sub.isNotEmpty()) {
             titulo.text = tit
             subtitulo.text = sub
@@ -758,7 +927,13 @@ class LauncherActivity : AppCompatActivity() {
         })
     }
 
-    fun abrirApp(pacote: String) {
+    /**
+     * Abre o app. Se ele ainda nao estiver no aparelho e o painel tiver
+     * mandado um `apk_url`, baixa e instala na hora — e so entao abre. Era
+     * esse o "app nao instalado" que aparecia mesmo com o APK no servidor.
+     */
+    fun abrirApp(app: JSONObject) {
+        val pacote = app.texto("pacote")
         if (pacote.isEmpty()) return
 
         if (bloqueado) {
@@ -766,21 +941,89 @@ class LauncherActivity : AppCompatActivity() {
             return
         }
 
-        try {
-            val intent = packageManager.getLaunchIntentForPackage(pacote)
-            if (intent != null) {
-                startActivity(intent)
-            } else {
-                Toast.makeText(this, "App nao instalado: $pacote", Toast.LENGTH_SHORT).show()
-                Registro.linha("app nao encontrado: $pacote")
+        val intent = try { packageManager.getLaunchIntentForPackage(pacote) } catch (_: Exception) { null }
+        if (intent != null) {
+            startActivity(intent)
+            return
+        }
+
+        val apkUrl = app.texto("apk_url")
+        if (apkUrl.isEmpty()) {
+            Toast.makeText(this, "App nao instalado e sem APK no painel", Toast.LENGTH_LONG).show()
+            Registro.linha("app sem apk_url: $pacote")
+            return
+        }
+
+        instalarEAbrir(app.texto("nome", "App"), pacote, apkUrl)
+    }
+
+    /** compatibilidade: abrir so pelo pacote, sem instalacao automatica */
+    fun abrirApp(pacote: String) {
+        abrirApp(JSONObject().put("pacote", pacote))
+    }
+
+    private fun instalarEAbrir(nome: String, pacote: String, apkUrl: String) {
+        if (instalando) {
+            Toast.makeText(this, "Ja tem uma instalacao em andamento", Toast.LENGTH_SHORT).show()
+            return
+        }
+        instalando = true
+
+        val painel = findViewById<View>(R.id.tela_instalacao)
+        val titulo = findViewById<TextView>(R.id.instalacao_titulo)
+        val detalhe = findViewById<TextView>(R.id.instalacao_detalhe)
+        val barra = findViewById<android.widget.ProgressBar>(R.id.instalacao_barra)
+
+        titulo.text = "Instalando $nome"
+        detalhe.text = "Baixando..."
+        barra.isIndeterminate = true
+        barra.progress = 0
+        painel.visibility = View.VISIBLE
+
+        CoroutineScope(Dispatchers.IO).launch {
+            val r = Instalador.baixarEInstalar(this@LauncherActivity, apkUrl, "app_$pacote.apk") { pct ->
+                handler.post {
+                    if (pct >= 0) {
+                        barra.isIndeterminate = false
+                        barra.progress = pct
+                        detalhe.text = "Baixando... $pct%"
+                    } else {
+                        detalhe.text = "Baixando..."
+                    }
+                }
             }
-        } catch (e: Exception) {
-            Registro.linha("erro ao abrir $pacote: ${e.message}")
+
+            handler.post {
+                when (r) {
+                    is Instalador.Resultado.Ok -> {
+                        detalhe.text = "Pronto! Abrindo..."
+                        barra.isIndeterminate = false
+                        barra.progress = 100
+                        handler.postDelayed({
+                            painel.visibility = View.GONE
+                            instalando = false
+                            val i = try { packageManager.getLaunchIntentForPackage(pacote) } catch (_: Exception) { null }
+                            if (i != null) startActivity(i)
+                            else Toast.makeText(this@LauncherActivity, "$nome instalado", Toast.LENGTH_SHORT).show()
+                        }, 900)
+                    }
+                    is Instalador.Resultado.Falha -> {
+                        painel.visibility = View.GONE
+                        instalando = false
+                        Toast.makeText(
+                            this@LauncherActivity,
+                            "Nao deu para instalar $nome: ${r.motivo}",
+                            Toast.LENGTH_LONG
+                        ).show()
+                        Registro.linha("instalacao de $pacote falhou: ${r.motivo}")
+                    }
+                }
+            }
         }
     }
 
     private fun adicionarIconeDoSistema(parent: LinearLayout, app: JSONObject) {
-        val pacote = app.optString("pacote", "")
+        val pacote = app.texto("pacote", "")
         try {
             val icon = packageManager.getApplicationIcon(pacote)
             val iv = ImageView(this).apply {
@@ -795,21 +1038,17 @@ class LauncherActivity : AppCompatActivity() {
     }
 
     private fun adicionarLetraFallback(parent: LinearLayout, app: JSONObject) {
-        val destaque = config?.optJSONObject("cores")?.optString("destaque", "#00E5FF") ?: "#00E5FF"
-        val tv = TextView(this).apply {
-            val nome = app.optString("nome", "?")
-            text = nome.take(1).uppercase()
-            setTextColor(Color.BLACK)
-            textSize = 14f
+        parent.addView(TextView(this).apply {
+            text = app.texto("nome", "?").take(1).uppercase()
+            setTextColor(Color.WHITE)
+            textSize = 13f
             gravity = android.view.Gravity.CENTER
-            val bg = GradientDrawable().apply {
-                setColor(Color.parseColor(destaque))
-                cornerRadius = dp(6).toFloat()
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Color.parseColor("#33FFFFFF"))
             }
-            background = bg
             layoutParams = LinearLayout.LayoutParams(dp(28), dp(28))
-        }
-        parent.addView(tv)
+        })
     }
 
     private fun dp(v: Int): Int =
@@ -861,9 +1100,9 @@ class LauncherActivity : AppCompatActivity() {
 
         override fun onBindViewHolder(holder: VH, position: Int) {
             val app = apps[position]
-            holder.nome.text = app.optString("nome", "App")
+            holder.nome.text = app.texto("nome", "App")
 
-            val iconeBase64 = app.optString("icone", "")
+            val iconeBase64 = app.texto("icone", "")
             if (iconeBase64.isNotEmpty() && iconeBase64.contains("base64,")) {
                 try {
                     val dados = iconeBase64.substringAfter("base64,")
@@ -887,12 +1126,11 @@ class LauncherActivity : AppCompatActivity() {
                 else v.animate().scaleX(1f).scaleY(1f).setDuration(120).start()
             }
 
-            val pacote = app.optString("pacote", "")
-            holder.itemView.setOnClickListener { ctx.abrirApp(pacote) }
+            holder.itemView.setOnClickListener { ctx.abrirApp(app) }
         }
 
         private fun mostrarIconeSistema(holder: VH, app: JSONObject) {
-            val pacote = app.optString("pacote", "")
+            val pacote = app.texto("pacote", "")
             try {
                 val icon = ctx.packageManager.getApplicationIcon(pacote)
                 holder.icone.setImageDrawable(icon)
@@ -903,17 +1141,16 @@ class LauncherActivity : AppCompatActivity() {
             }
         }
 
+        /** circulo discreto com a inicial — nada de quadrado colorido */
         private fun mostrarLetra(holder: VH, app: JSONObject) {
             holder.icone.visibility = View.GONE
             holder.letra.visibility = View.VISIBLE
-            val nome = app.optString("nome", "?")
-            holder.letra.text = nome.take(1).uppercase()
-            val destaque = cfg?.optJSONObject("cores")?.optString("destaque", "#00E5FF") ?: "#00E5FF"
-            val bg = GradientDrawable().apply {
-                setColor(Color.parseColor(destaque))
-                cornerRadius = ctx.dp(10).toFloat()
+            holder.letra.text = app.texto("nome", "?").take(1).uppercase()
+            holder.letra.setTextColor(Color.WHITE)
+            holder.letra.background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Color.parseColor("#33FFFFFF"))
             }
-            holder.letra.background = bg
         }
     }
 }

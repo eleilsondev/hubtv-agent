@@ -50,10 +50,12 @@
                     android:orientation="horizontal"
                     android:gravity="center_vertical">
 
+                    <!-- maxWidth evita que uma logo muito larga empurre o resto -->
                     <ImageView
                         android:id="@+id/logo"
                         android:layout_width="wrap_content"
-                        android:layout_height="36dp"
+                        android:layout_height="52dp"
+                        android:maxWidth="240dp"
                         android:adjustViewBounds="true"
                         android:scaleType="fitCenter"
                         android:visibility="gone" />
@@ -64,7 +66,7 @@
                         android:layout_height="wrap_content"
                         android:text="HUB TV"
                         android:textColor="#FFFFFF"
-                        android:textSize="20sp"
+                        android:textSize="22sp"
                         android:textStyle="bold"
                         android:singleLine="true"
                         android:layout_marginStart="10dp"
@@ -135,6 +137,14 @@
             </LinearLayout>
         </LinearLayout>
 
+        <!-- ============ VITRINE: banner + destaques ao lado ============ -->
+        <LinearLayout
+            android:id="@+id/linha_vitrine"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="12dp">
+
         <!-- ================= BANNER =================
              Tamanho FIXO em dp, definido no painel (largura_banner x
              altura_banner). Nao usa proporcao: o painel ja recorta a arte
@@ -144,11 +154,9 @@
             android:id="@+id/banner_container"
             android:layout_width="480dp"
             android:layout_height="160dp"
-            android:layout_gravity="center_horizontal"
             android:background="@drawable/card_bg"
             android:clipChildren="true"
-            android:clipToPadding="true"
-            android:layout_marginBottom="10dp">
+            android:clipToPadding="true">
 
             <ImageView
                 android:id="@+id/banner_imagem_a"
@@ -216,16 +224,32 @@
                 android:textStyle="bold" />
         </FrameLayout>
 
+            <!-- ate 2 apps do tipo "destaque", empilhados ao lado do banner.
+                 Preenchidos em montarDestaques(). -->
+            <LinearLayout
+                android:id="@+id/destaques_container"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="match_parent"
+                android:orientation="vertical"
+                android:layout_marginStart="12dp" />
+        </LinearLayout>
+
         <!-- ================= CARROSSEL DE APPS =================
              Fileira horizontal de cards de largura fixa. Com muitos apps a
              lista rola para a direita conforme o foco anda, em vez de
-             espremer tudo numa grade. -->
+             espremer tudo numa grade. minHeight garante que o nome do app
+             nunca some, por maior que fique o banner. -->
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/apps_grid"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:minHeight="136dp"
             android:clipToPadding="false"
-            android:padding="6dp" />
+            android:paddingStart="2dp"
+            android:paddingEnd="2dp"
+            android:paddingTop="4dp"
+            android:paddingBottom="4dp" />
 
         <!-- empurra a barra inferior para baixo -->
         <View
@@ -297,12 +321,58 @@
         </LinearLayout>
     </FrameLayout>
 
-    <!-- TELA DE BLOQUEIO -->
+    <!-- PROGRESSO DA INSTALACAO AUTOMATICA DE APK -->
+    <FrameLayout
+        android:id="@+id/tela_instalacao"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#D0070B14"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="420dp"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:background="@drawable/card_bg"
+            android:padding="32dp">
+
+            <TextView
+                android:id="@+id/instalacao_titulo"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:textColor="#FFFFFF"
+                android:textSize="20sp"
+                android:textStyle="bold"
+                android:singleLine="true"
+                android:ellipsize="end" />
+
+            <ProgressBar
+                android:id="@+id/instalacao_barra"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="match_parent"
+                android:layout_height="6dp"
+                android:max="100"
+                android:layout_marginTop="20dp" />
+
+            <TextView
+                android:id="@+id/instalacao_detalhe"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="#90FFFFFF"
+                android:textSize="14sp"
+                android:layout_marginTop="14dp" />
+        </LinearLayout>
+    </FrameLayout>
+
+    <!-- TELA DE BLOQUEIO / LICENCA VENCIDA -->
     <FrameLayout
         android:id="@+id/tela_bloqueio"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="#E0000000"
+        android:background="#F0070B14"
         android:visibility="gone">
 
         <LinearLayout
@@ -311,23 +381,83 @@
             android:layout_gravity="center"
             android:gravity="center"
             android:orientation="vertical"
-            android:padding="40dp">
+            android:paddingStart="48dp"
+            android:paddingEnd="48dp">
+
+            <!-- logo do revendedor, se houver -->
+            <ImageView
+                android:id="@+id/bloqueio_logo"
+                android:layout_width="wrap_content"
+                android:layout_height="64dp"
+                android:maxWidth="280dp"
+                android:adjustViewBounds="true"
+                android:scaleType="fitCenter"
+                android:layout_marginBottom="28dp"
+                android:visibility="gone" />
 
             <TextView
+                android:id="@+id/bloqueio_titulo"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="DISPOSITIVO BLOQUEADO"
+                android:text="ASSINATURA VENCIDA"
                 android:textColor="#F87171"
-                android:textSize="24sp"
+                android:textSize="30sp"
+                android:letterSpacing="0.04"
                 android:textStyle="bold" />
 
             <TextView
+                android:id="@+id/bloqueio_mensagem"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Entre em contato com seu revendedor"
-                android:textColor="#80FFFFFF"
-                android:textSize="14sp"
-                android:layout_marginTop="8dp" />
+                android:maxWidth="640dp"
+                android:gravity="center"
+                android:text="Fale com seu revendedor para renovar e voltar a assistir."
+                android:textColor="#B0FFFFFF"
+                android:textSize="17sp"
+                android:lineSpacingExtra="4dp"
+                android:layout_marginTop="14dp" />
+
+            <!-- cartao com o contato de quem vendeu -->
+            <LinearLayout
+                android:id="@+id/bloqueio_contato_card"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:background="@drawable/card_bg"
+                android:paddingStart="40dp"
+                android:paddingEnd="40dp"
+                android:paddingTop="20dp"
+                android:paddingBottom="20dp"
+                android:layout_marginTop="32dp"
+                android:visibility="gone">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="FALE COM SEU REVENDEDOR"
+                    android:textColor="#70FFFFFF"
+                    android:textSize="12sp"
+                    android:letterSpacing="0.12"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/bloqueio_contato"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="#34D399"
+                    android:textSize="30sp"
+                    android:textStyle="bold"
+                    android:layout_marginTop="8dp" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/bloqueio_venceu_em"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="#60FFFFFF"
+                android:textSize="13sp"
+                android:layout_marginTop="24dp" />
         </LinearLayout>
     </FrameLayout>
 </FrameLayout>

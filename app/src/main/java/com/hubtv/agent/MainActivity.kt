@@ -125,7 +125,7 @@ class MainActivity : AppCompatActivity() {
         v.btnInscrever.setOnClickListener { comProtecao {
             lifecycleScope.launch {
                 ocupado(true)
-                when (val r = CheckIn.pulso(this@MainActivity)) {
+                when (val r = CheckIn.sincronizar(this@MainActivity)) {
                     is CheckIn.Resultado.Ok -> {
                         Registro.linha("dispositivo registrado com sucesso")
                         atualizarEstadoInscricao()
@@ -145,7 +145,7 @@ class MainActivity : AppCompatActivity() {
                 } else if (!Config.inscrito(this@MainActivity)) {
                     Registro.linha("inscreva o dispositivo primeiro (digite o codigo)")
                 } else {
-                    when (val r = CheckIn.pulso(this@MainActivity)) {
+                    when (val r = CheckIn.sincronizar(this@MainActivity)) {
                         is CheckIn.Resultado.Ok ->
                             Registro.linha("check-in enviado - painel respondeu ok")
                         is CheckIn.Resultado.Falha ->

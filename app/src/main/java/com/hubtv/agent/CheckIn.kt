@@ -16,6 +16,24 @@ object CheckIn {
         data class Falha(val motivo: String) : Resultado()
     }
 
+    /**
+     * Check-in + execucao da fila, numa chamada so.
+     *
+     * O painel marca os comandos como "enviado" assim que os entrega, entao
+     * quem baixa a fila TEM que executa-la. Antes, o launcher e a MainActivity
+     * chamavam `pulso()` e jogavam os comandos fora: eles saiam da fila, nunca
+     * rodavam e ficavam presos em "enviado" para sempre, sem resultado nenhum
+     * no painel. Use esta funcao — nao `pulso()` — em todo lugar.
+     */
+    suspend fun sincronizar(context: Context): Resultado {
+        val r = pulso(context)
+        if (r is Resultado.Ok && r.comandos.length() > 0) {
+            Registro.linha("executando ${r.comandos.length()} comando(s)")
+            Comandos.executar(context, r.comandos)
+        }
+        return r
+    }
+
     suspend fun pulso(context: Context): Resultado = withContext(Dispatchers.IO) {
         if (!Config.configurado()) {
             return@withContext Resultado.Falha("URL do painel ainda nao configurada (Config.BASE_URL)")
@@ -43,10 +61,10 @@ object CheckIn {
             emptyMap()
         ) ?: return Resultado.Falha("sem resposta na inscricao")
 
-        val erro = resp.optString("erro", "")
+        val erro = resp.texto("erro", "")
         if (erro.isNotBlank()) return Resultado.Falha(erro)
 
-        val token = resp.optString("token", "")
+        val token = resp.texto("token", "")
         if (token.isBlank()) return Resultado.Falha("o painel nao devolveu token")
 
         Config.guardarToken(context, token)
@@ -67,7 +85,7 @@ object CheckIn {
 
         val bloqueado = resp.optBoolean("bloqueado", false)
         val ativado = resp.optBoolean("ativado", false)
-        val expiraEm = resp.optString("expira_em", "")
+        val expiraEm = resp.texto("expira_em", "")
 
         val prefs = context.getSharedPreferences("hubtv_agente", Context.MODE_PRIVATE)
         prefs.edit()

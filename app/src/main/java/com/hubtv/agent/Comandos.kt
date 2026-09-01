@@ -5,8 +5,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.File
-import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -50,11 +48,13 @@ object Comandos {
     private data class ResultadoCmd(val sucesso: Boolean, val saida: String)
 
     private suspend fun executarShell(context: Context, payload: JSONObject?): ResultadoCmd {
-        val comando = payload?.optString("comando", "")
-            ?: payload?.optString("raw", "")
-            ?: return ResultadoCmd(false, "payload sem campo 'comando'")
+        // O painel embrulha texto que nao e JSON em {"raw": "..."}. O elvis
+        // antigo nunca chegava no 'raw' porque optString devolve "" e nao null
+        // quando a chave falta — todo comando digitado solto morria aqui como
+        // "comando vazio".
+        val comando = payload?.texto("comando")?.ifBlank { payload.texto("raw") } ?: ""
 
-        if (comando.isBlank()) return ResultadoCmd(false, "comando vazio")
+        if (comando.isBlank()) return ResultadoCmd(false, "payload sem 'comando' nem 'raw'")
 
         return when (val r = Adb.shell(context, comando)) {
             is Adb.Resultado.Ok -> ResultadoCmd(true, r.saida)
@@ -63,39 +63,23 @@ object Comandos {
     }
 
     private suspend fun instalarApp(context: Context, payload: JSONObject?): ResultadoCmd {
-        val url = payload?.optString("url", "")
-            ?: return ResultadoCmd(false, "payload sem campo 'url'")
-        if (url.isBlank()) return ResultadoCmd(false, "url vazia")
+        val url = payload?.texto("url") ?: ""
+        if (url.isBlank()) return ResultadoCmd(false, "payload sem campo 'url'")
 
-        val pacote = payload.optString("pacote", "")
+        val pacote = payload.texto("pacote")
         Registro.linha("baixando APK: $url")
 
-        val arquivo = baixarArquivo(context, url, "install_temp.apk")
-            ?: return ResultadoCmd(false, "falha no download")
-
-        Registro.linha("instalando APK: ${arquivo.absolutePath} (${arquivo.length() / 1024}KB)")
-
-        val resultado = when (val r = Adb.shell(context, "pm install -r ${arquivo.absolutePath}")) {
-            is Adb.Resultado.Ok -> {
-                if (r.saida.contains("Success", ignoreCase = true)) {
-                    ResultadoCmd(true, "app instalado${if (pacote.isNotBlank()) ": $pacote" else ""}")
-                } else {
-                    ResultadoCmd(false, "pm install: ${r.saida}")
-                }
-            }
-            is Adb.Resultado.Falha -> ResultadoCmd(false, r.motivo)
+        return when (val r = Instalador.baixarEInstalar(context, url)) {
+            is Instalador.Resultado.Ok ->
+                ResultadoCmd(true, "app instalado${if (pacote.isNotBlank()) ": $pacote" else ""}")
+            is Instalador.Resultado.Falha -> ResultadoCmd(false, r.motivo)
         }
-
-        arquivo.delete()
-        return resultado
     }
 
     private suspend fun desinstalarApp(context: Context, payload: JSONObject?): ResultadoCmd {
-        val pacote = payload?.optString("pacote", "")
-            ?: payload?.optString("raw", "")
-            ?: return ResultadoCmd(false, "payload sem campo 'pacote'")
+        val pacote = payload?.texto("pacote")?.ifBlank { payload.texto("raw") } ?: ""
 
-        if (pacote.isBlank()) return ResultadoCmd(false, "pacote vazio")
+        if (pacote.isBlank()) return ResultadoCmd(false, "payload sem 'pacote' nem 'raw'")
 
         return when (val r = Adb.shell(context, "pm uninstall $pacote")) {
             is Adb.Resultado.Ok -> ResultadoCmd(true, r.saida)
@@ -118,6 +102,8 @@ object Comandos {
 
     private suspend fun atualizarLauncher(context: Context): ResultadoCmd {
         return try {
+            // pulso() e nao sincronizar(): ja estamos DENTRO da execucao da
+            // fila, e sincronizar chamaria executar() de novo em recursao.
             CheckIn.pulso(context)
             ResultadoCmd(true, "launcher atualizado")
         } catch (e: Exception) {
@@ -126,67 +112,16 @@ object Comandos {
     }
 
     private suspend fun atualizarAgente(context: Context, payload: JSONObject?): ResultadoCmd {
-        val url = payload?.optString("url", "")
-            ?: return ResultadoCmd(false, "payload sem campo 'url'")
-        if (url.isBlank()) return ResultadoCmd(false, "url vazia")
+        val url = payload?.texto("url") ?: ""
+        if (url.isBlank()) return ResultadoCmd(false, "payload sem campo 'url'")
 
         Registro.linha("baixando nova versao do agente: $url")
 
-        val arquivo = baixarArquivo(context, url, "hubtv_update.apk")
-            ?: return ResultadoCmd(false, "falha no download da atualizacao")
-
-        Registro.linha("instalando atualizacao: ${arquivo.length() / 1024}KB")
-
-        val resultado = when (val r = Adb.shell(context, "pm install -r ${arquivo.absolutePath}")) {
-            is Adb.Resultado.Ok -> {
-                if (r.saida.contains("Success", ignoreCase = true)) {
-                    ResultadoCmd(true, "agente atualizado - reiniciando")
-                } else {
-                    ResultadoCmd(false, "pm install: ${r.saida}")
-                }
-            }
-            is Adb.Resultado.Falha -> ResultadoCmd(false, r.motivo)
+        return when (val r = Instalador.baixarEInstalar(context, url, "hubtv_update.apk")) {
+            is Instalador.Resultado.Ok -> ResultadoCmd(true, "agente atualizado - reiniciando")
+            is Instalador.Resultado.Falha -> ResultadoCmd(false, r.motivo)
         }
-
-        arquivo.delete()
-        return resultado
     }
-
-    private suspend fun baixarArquivo(context: Context, url: String, nomeArquivo: String): File? =
-        withContext(Dispatchers.IO) {
-            try {
-                val con = URL(url).openConnection() as HttpURLConnection
-                con.connectTimeout = 30_000
-                con.readTimeout = 60_000
-                con.instanceFollowRedirects = true
-
-                if (con.responseCode !in 200..299) {
-                    Registro.linha("download falhou: HTTP ${con.responseCode}")
-                    con.disconnect()
-                    return@withContext null
-                }
-
-                val arquivo = File(context.cacheDir, nomeArquivo)
-                FileOutputStream(arquivo).use { fos ->
-                    con.inputStream.use { input ->
-                        val buffer = ByteArray(8192)
-                        var total = 0L
-                        while (true) {
-                            val lidos = input.read(buffer)
-                            if (lidos < 0) break
-                            fos.write(buffer, 0, lidos)
-                            total += lidos
-                        }
-                        Registro.linha("download completo: ${total / 1024}KB")
-                    }
-                }
-                con.disconnect()
-                arquivo
-            } catch (e: Exception) {
-                Registro.linha("erro no download: ${e.message}")
-                null
-            }
-        }
 
     private suspend fun reportar(context: Context, comandoId: Int, resultado: ResultadoCmd) {
         val token = Config.token(context) ?: return

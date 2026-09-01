@@ -110,8 +110,35 @@ sozinho após o boot, sem PC**. É a "Etapa 1" que prova a arquitetura de frota.
     `banner_intervalo` segundos, com bolinhas indicadoras. O banner e
     vitrine pura: nao abre app e nao pega foco.
   - **Apps em carrossel horizontal** (LinearLayoutManager HORIZONTAL) com
-    cards de largura fixa (112dp) — antes era grid de 5 colunas, que
+    cards de largura fixa (116dp) — antes era grid de 5 colunas, que
     achatava os icones quando o banner crescia.
+  - **Tipos de app**: `app` vai para o carrossel, `atalho` para a barra de
+    baixo, `destaque` para a coluna ao lado do banner (maximo 2).
+  - **Instalacao automatica**: clicar num app que nao esta no aparelho baixa
+    o `apk_url` do painel e instala na hora, com barra de progresso
+    (`tela_instalacao`). So funciona se o APK foi enviado no cadastro do app.
+  - **Travas de proporcao** em `aplicarTamanhoBanner()`: o banner nunca passa
+    de 45% da altura da tela nem invade a coluna de destaques. Sem isso um
+    banner grande espremia a fileira de apps ate os nomes sumirem.
+  - **Sem quadrado nos icones**: `app_card_bg` e transparente; so o item com
+    foco ganha fundo e borda. Sem icone, mostra um circulo discreto com a
+    inicial (nunca um quadrado colorido).
+
+## Armadilhas ja pagas (nao repetir)
+
+- **`optString` devolve a STRING "null"** quando o campo veio nulo no JSON.
+  Era isso que escrevia "Venc: null" e "null" em cima do banner. Use sempre
+  `JSONObject.texto()` (`Json.kt`), nunca `optString`.
+- **Quem baixa a fila de comandos TEM que executa-la.** O painel marca como
+  "enviado" na entrega; se o chamador descartar os comandos eles somem da
+  fila sem nunca rodar e ficam presos em "enviado", sem resultado. Use
+  `CheckIn.sincronizar()` — nunca `pulso()` direto (a unica excecao e dentro
+  de `Comandos.atualizarLauncher()`, que recursaria). O painel tambem reenvia
+  comandos parados em "enviado" ha mais de 3 minutos.
+- **Elvis nao pega optString ausente**: `payload?.optString("a") ?: payload?.optString("b")`
+  nunca chega no segundo porque optString devolve "" e nao null. Todo comando
+  shell digitado como texto solto (que o painel embrulha em `{"raw": ...}`)
+  morria como "comando vazio". Usar `texto("a").ifBlank { texto("b") }`.
 - `.../MainActivity.kt` — UI de controle do agente (botões: Ligar depuração,
   Parear, Conectar, Testar poderes, Fixar porta 5555, Limpar). Registro na tela.
 - `.../Registro.kt` — log em memória observável, exibido na UI.

@@ -107,13 +107,8 @@ class AgentService : Service() {
         delay(ESPERA_BOOT_MS)
         while (true) {
             if (Config.configurado()) {
-                when (val r = CheckIn.pulso(this)) {
-                    is CheckIn.Resultado.Ok -> {
-                        if (r.comandos.length() > 0) {
-                            Registro.linha("executando ${r.comandos.length()} comando(s)")
-                            Comandos.executar(this@AgentService, r.comandos)
-                        }
-                    }
+                when (val r = CheckIn.sincronizar(this)) {
+                    is CheckIn.Resultado.Ok -> { }
                     is CheckIn.Resultado.Falha -> Registro.linha("check-in: ${r.motivo}")
                 }
             }
