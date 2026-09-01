@@ -145,8 +145,15 @@ object CheckIn {
                 apps.put(JSONObject().put("pkg", pkg).put("versao", info.versionName ?: "?"))
             } catch (_: Exception) { }
         }
+        val versaoAgente = try {
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "?"
+        } catch (_: Exception) {
+            "?"
+        }
+
         return JSONObject()
             .put("device_id", Config.idDispositivo(context))
+            .put("agente_versao", versaoAgente)
             .put("modelo", Build.MODEL)
             .put("fabricante", Build.MANUFACTURER)
             .put("android", Build.VERSION.RELEASE)

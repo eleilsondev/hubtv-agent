@@ -43,38 +43,66 @@ object Instalador {
     }
 
     /**
-     * O `pm install` roda como usuario **shell**, que nao consegue entrar em
-     * /data/user/0/<pacote>/ — dai o "Unable to open file / Consider using a
-     * file under /data/local/tmp/". Por isso o APK e baixado no cache EXTERNO
-     * (que o shell le) e copiado para /data/local/tmp antes de instalar.
+     * O `pm install <caminho>` roda como usuario **shell**, que nao consegue
+     * entrar em /data/user/0/<pacote>/ — dai o "Unable to open file /
+     * Consider using a file under /data/local/tmp/".
+     *
+     * Sao tres tentativas, da mais confiavel para a menos:
+     *  1. streaming: o APK vai pela entrada padrao do `pm install -S`, sem
+     *     arquivo nenhum para o shell abrir. E o que o `adb install` faz.
+     *  2. copiar para /data/local/tmp e instalar de la.
+     *  3. instalar direto do caminho do arquivo (funciona se ele estiver no
+     *     armazenamento externo, que o shell enxerga).
+     *
+     * A saida diz qual caminho funcionou, para o Diagnostico nao virar
+     * adivinhacao quando algum firmware bloquear um deles.
      */
     private suspend fun instalarArquivo(context: Context, arquivo: File): Resultado {
-        val destino = "/data/local/tmp/${arquivo.name}"
+        val tentativas = mutableListOf<String>()
 
-        val copia = Adb.shell(context, "cp '${arquivo.absolutePath}' '$destino' && chmod 644 '$destino'")
+        // 1) streaming pelo proprio canal do adb
+        val stream = Adb.shellEnviando(
+            context, "pm install -r -S ${arquivo.length()}", arquivo
+        )
+        if (stream is Adb.Resultado.Ok && stream.saida.contains("Success", true)) {
+            return Resultado.Ok("instalado via streaming")
+        }
+        tentativas += "streaming: " + resumo(stream)
+
+        // 2) /data/local/tmp
+        val destino = "/data/local/tmp/${arquivo.name}"
+        val copia = Adb.shell(context, "cp '${arquivo.absolutePath}' '$destino' 2>&1 && chmod 644 '$destino' 2>&1")
         val copiou = copia is Adb.Resultado.Ok &&
+            !copia.saida.contains("denied", true) &&
             !copia.saida.contains("No such file", true) &&
-            !copia.saida.contains("Permission denied", true) &&
             !copia.saida.contains("can't open", true)
 
-        // Se a copia falhar, ainda vale tentar direto do caminho externo.
-        val caminho = if (copiou) destino else arquivo.absolutePath
-        if (!copiou) {
-            Registro.linha("cp para /data/local/tmp falhou, tentando direto: ${(copia as? Adb.Resultado.Ok)?.saida ?: ""}")
+        if (copiou) {
+            val r = Adb.shell(context, "pm install -r '$destino'")
+            Adb.shell(context, "rm -f '$destino'")
+            if (r is Adb.Resultado.Ok && r.saida.contains("Success", true)) {
+                return Resultado.Ok("instalado via /data/local/tmp")
+            }
+            tentativas += "tmp: " + resumo(r)
+        } else {
+            tentativas += "cp para tmp: " + resumo(copia)
         }
 
-        val r = Adb.shell(context, "pm install -r '$caminho'")
-        if (copiou) Adb.shell(context, "rm -f '$destino'")
-
-        return when (r) {
-            is Adb.Resultado.Ok ->
-                if (r.saida.contains("Success", ignoreCase = true)) {
-                    Resultado.Ok(r.saida.trim().ifEmpty { "instalado" })
-                } else {
-                    Resultado.Falha("pm install: ${r.saida.trim().take(400)}")
-                }
-            is Adb.Resultado.Falha -> Resultado.Falha(r.motivo)
+        // 3) direto do caminho onde o arquivo esta
+        val direto = Adb.shell(context, "pm install -r '${arquivo.absolutePath}'")
+        if (direto is Adb.Resultado.Ok && direto.saida.contains("Success", true)) {
+            return Resultado.Ok("instalado direto do arquivo")
         }
+        tentativas += "direto: " + resumo(direto)
+
+        val relato = tentativas.joinToString(" | ")
+        Registro.linha("as 3 formas de instalar falharam -> $relato")
+        return Resultado.Falha(relato.take(600))
+    }
+
+    private fun resumo(r: Adb.Resultado): String = when (r) {
+        is Adb.Resultado.Ok -> r.saida.trim().replace("\n", " ").take(150).ifEmpty { "sem saida" }
+        is Adb.Resultado.Falha -> r.motivo.take(150)
     }
 
     suspend fun baixar(

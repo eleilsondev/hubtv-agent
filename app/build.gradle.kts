@@ -11,8 +11,11 @@ android {
         applicationId = "com.hubtv.agent"
         minSdk = 21
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1"
+        // A build da nuvem injeta o numero da execucao; localmente fica "dev".
+        // E assim que o painel sabe qual build cada aparelho esta rodando.
+        val numeroBuild = (System.getenv("BUILD_NUMBER") ?: "").toIntOrNull()
+        versionCode = numeroBuild ?: 1
+        versionName = if (numeroBuild != null) "b$numeroBuild" else "dev"
     }
 
     buildTypes {

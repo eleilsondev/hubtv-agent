@@ -34,6 +34,9 @@ jobs:
 
       - name: Compilar o APK de debug
         run: ./gradlew assembleDebug --no-daemon --stacktrace
+        env:
+          # entra no versionName do APK, que o agente reporta no check-in
+          BUILD_NUMBER: ${{ github.run_number }}
 
       - name: Renomear com data e numero da build
         run: |

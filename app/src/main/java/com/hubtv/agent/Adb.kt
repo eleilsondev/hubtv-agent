@@ -145,6 +145,50 @@ object Adb {
             }
         }
 
+    /**
+     * Roda um comando de shell ALIMENTANDO a entrada padrao dele com um
+     * arquivo — e assim que o `adb install` funciona por dentro.
+     *
+     * Existe porque o `pm install <caminho>` roda como usuario shell e nao
+     * consegue abrir arquivo nenhum dentro de /data/user/0/<pacote>/. Com
+     * `pm install -S <bytes>` o APK viaja pelo proprio canal do adb e nao ha
+     * arquivo para o shell abrir. O `-S` diz quantos bytes esperar, entao nao
+     * precisamos fechar a saida para sinalizar o fim.
+     */
+    suspend fun shellEnviando(context: Context, comando: String, arquivo: java.io.File): Resultado =
+        withContext(Dispatchers.IO) {
+            try {
+                val gerente = AdbManager.get(context)
+                if (!gerente.isConnected) return@withContext Resultado.Falha("sem conexao com o adbd")
+
+                gerente.openStream("shell:$comando").use { fluxo ->
+                    val paraOComando = fluxo.openOutputStream()
+                    arquivo.inputStream().use { entrada ->
+                        val buffer = ByteArray(64 * 1024)
+                        while (true) {
+                            val lidos = entrada.read(buffer)
+                            if (lidos < 0) break
+                            paraOComando.write(buffer, 0, lidos)
+                        }
+                    }
+                    paraOComando.flush()
+
+                    val resposta = ByteArrayOutputStream()
+                    fluxo.openInputStream().use { entrada ->
+                        val buffer = ByteArray(4096)
+                        while (true) {
+                            val lidos = entrada.read(buffer)
+                            if (lidos < 0) break
+                            resposta.write(buffer, 0, lidos)
+                        }
+                    }
+                    Resultado.Ok(resposta.toString("UTF-8").trim())
+                }
+            } catch (e: Throwable) {
+                Resultado.Falha("erro ao enviar o arquivo pelo adb: ${e.message}", e)
+            }
+        }
+
     fun desconectar(context: Context) {
         try {
             AdbManager.get(context).disconnect()

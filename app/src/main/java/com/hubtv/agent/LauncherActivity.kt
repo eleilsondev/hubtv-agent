@@ -1000,6 +1000,17 @@ class LauncherActivity : AppCompatActivity() {
                 }
             }
 
+            // entra no Diagnostico igual aos comandos do painel, senao a
+            // unica pista seria um Toast que some em 3 segundos
+            Historico.registrar(
+                this@LauncherActivity, 0, "instalar ($nome)",
+                r is Instalador.Resultado.Ok,
+                when (r) {
+                    is Instalador.Resultado.Ok -> r.detalhe
+                    is Instalador.Resultado.Falha -> r.motivo
+                }
+            )
+
             handler.post {
                 when (r) {
                     is Instalador.Resultado.Ok -> {
