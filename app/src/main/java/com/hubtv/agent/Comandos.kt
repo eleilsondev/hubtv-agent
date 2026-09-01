@@ -31,6 +31,7 @@ object Comandos {
                     "desbloquear" -> bloquear(context, false)
                     "atualizar_launcher" -> atualizarLauncher(context)
                     "atualizar_agente" -> atualizarAgente(context, payload)
+                    "listar_apps" -> listarApps(context)
                     else -> ResultadoCmd(false, "tipo desconhecido: $tipo")
                 }
             } catch (e: Exception) {
@@ -88,6 +89,37 @@ object Comandos {
         return when (val r = Adb.shell(context, "pm uninstall $pacote")) {
             is Adb.Resultado.Ok -> ResultadoCmd(true, r.saida)
             is Adb.Resultado.Falha -> ResultadoCmd(false, r.motivo)
+        }
+    }
+
+    /**
+     * Inventario dos apps instalados, direto do PackageManager — nao pelo
+     * `pm list packages`, que so devolve nomes de pacote. Aqui vem tambem o
+     * nome que o usuario le, a versao e se o app abre, que e o que a tela de
+     * permissoes do painel precisa mostrar.
+     */
+    private fun listarApps(context: Context): ResultadoCmd {
+        return try {
+            val pm = context.packageManager
+            val lista = JSONArray()
+
+            for (info in pm.getInstalledPackages(0)) {
+                val ai = info.applicationInfo ?: continue
+                val doSistema = (ai.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0
+                lista.put(
+                    JSONObject()
+                        .put("pacote", info.packageName)
+                        .put("nome", pm.getApplicationLabel(ai).toString())
+                        .put("versao", info.versionName ?: "")
+                        .put("sistema", doSistema)
+                        .put("abre", pm.getLaunchIntentForPackage(info.packageName) != null)
+                )
+            }
+
+            Registro.linha("inventario: ${lista.length()} apps")
+            ResultadoCmd(true, lista.toString())
+        } catch (e: Exception) {
+            ResultadoCmd(false, "erro ao listar apps: ${e.message}")
         }
     }
 

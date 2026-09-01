@@ -9,6 +9,11 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
+    <!-- Necessaria a partir do Android 11 para o comando 'listar_apps'
+         enxergar todos os pacotes instalados, e nao so os do proprio app. -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
+
     <!--
         Concedida uma vez, pelo deploy no HubTV:
             pm grant com.hubtv.agent android.permission.WRITE_SECURE_SETTINGS
