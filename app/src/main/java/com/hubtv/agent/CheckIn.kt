@@ -82,6 +82,7 @@ object CheckIn {
 
         val comandos = resp.optJSONArray("comandos") ?: JSONArray()
         Registro.linha("check-in ok - ${comandos.length()} comando(s) na fila")
+        Historico.marcarCheckin(context)
 
         val bloqueado = resp.optBoolean("bloqueado", false)
         val ativado = resp.optBoolean("ativado", false)

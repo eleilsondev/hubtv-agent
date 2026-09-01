@@ -174,6 +174,10 @@ class MainActivity : AppCompatActivity() {
             v.registro.text = ""
         }
 
+        v.btnDiagnostico.setOnClickListener {
+            startActivity(Intent(this, DiagnosticoActivity::class.java))
+        }
+
         atualizarBotaoLauncher()
         atualizarEstadoInscricao()
 

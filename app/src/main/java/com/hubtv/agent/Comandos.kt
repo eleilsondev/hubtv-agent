@@ -39,6 +39,10 @@ object Comandos {
 
             Registro.linha("comando #$id: ${if (resultado.sucesso) "OK" else "FALHOU"} - ${resultado.saida.take(200)}")
 
+            // grava em disco para a tela de Diagnostico responder
+            // "esse comando chegou e rodou aqui?" mesmo apos reiniciar
+            Historico.registrar(context, id, tipo, resultado.sucesso, resultado.saida)
+
             if (id > 0) {
                 reportar(context, id, resultado)
             }

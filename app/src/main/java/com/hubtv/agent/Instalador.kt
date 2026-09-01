@@ -37,18 +37,44 @@ object Instalador {
 
         Registro.linha("instalando ${arquivo.name} (${arquivo.length() / 1024}KB)")
 
-        val resultado = when (val r = Adb.shell(context, "pm install -r ${arquivo.absolutePath}")) {
+        val resultado = instalarArquivo(context, arquivo)
+        arquivo.delete()
+        return resultado
+    }
+
+    /**
+     * O `pm install` roda como usuario **shell**, que nao consegue entrar em
+     * /data/user/0/<pacote>/ — dai o "Unable to open file / Consider using a
+     * file under /data/local/tmp/". Por isso o APK e baixado no cache EXTERNO
+     * (que o shell le) e copiado para /data/local/tmp antes de instalar.
+     */
+    private suspend fun instalarArquivo(context: Context, arquivo: File): Resultado {
+        val destino = "/data/local/tmp/${arquivo.name}"
+
+        val copia = Adb.shell(context, "cp '${arquivo.absolutePath}' '$destino' && chmod 644 '$destino'")
+        val copiou = copia is Adb.Resultado.Ok &&
+            !copia.saida.contains("No such file", true) &&
+            !copia.saida.contains("Permission denied", true) &&
+            !copia.saida.contains("can't open", true)
+
+        // Se a copia falhar, ainda vale tentar direto do caminho externo.
+        val caminho = if (copiou) destino else arquivo.absolutePath
+        if (!copiou) {
+            Registro.linha("cp para /data/local/tmp falhou, tentando direto: ${(copia as? Adb.Resultado.Ok)?.saida ?: ""}")
+        }
+
+        val r = Adb.shell(context, "pm install -r '$caminho'")
+        if (copiou) Adb.shell(context, "rm -f '$destino'")
+
+        return when (r) {
             is Adb.Resultado.Ok ->
                 if (r.saida.contains("Success", ignoreCase = true)) {
                     Resultado.Ok(r.saida.trim().ifEmpty { "instalado" })
                 } else {
-                    Resultado.Falha("pm install: ${r.saida.trim()}")
+                    Resultado.Falha("pm install: ${r.saida.trim().take(400)}")
                 }
             is Adb.Resultado.Falha -> Resultado.Falha(r.motivo)
         }
-
-        arquivo.delete()
-        return resultado
     }
 
     suspend fun baixar(
@@ -75,7 +101,11 @@ object Instalador {
             }
 
             val total = con.contentLength.toLong()
-            val arquivo = File(context.cacheDir, nomeArquivo)
+            // Cache EXTERNO de proposito: o cache interno fica em
+            // /data/user/0/<pacote>/, onde o usuario shell do `pm install`
+            // nao consegue entrar. Ver instalarArquivo().
+            val pasta = context.externalCacheDir ?: context.cacheDir
+            val arquivo = File(pasta, nomeArquivo)
 
             FileOutputStream(arquivo).use { saida ->
                 con.inputStream.use { entrada ->

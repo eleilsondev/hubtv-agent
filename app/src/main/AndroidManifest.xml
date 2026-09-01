@@ -58,6 +58,13 @@
             </intent-filter>
         </activity>
 
+        <!-- devolutiva no aparelho: status e resultado dos comandos -->
+        <activity
+            android:name=".DiagnosticoActivity"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:screenOrientation="landscape" />
+
         <service
             android:name=".AgentService"
             android:enabled="true"

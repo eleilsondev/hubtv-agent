@@ -104,6 +104,13 @@ class LauncherActivity : AppCompatActivity() {
             abrirConfigAdb()
             return true
         }
+        // INFO (ou o botao amarelo) abre o diagnostico direto, sem passar
+        // pela tela de config — e o caminho rapido para ver se os comandos
+        // do painel estao chegando neste aparelho.
+        if (keyCode == KeyEvent.KEYCODE_INFO || keyCode == KeyEvent.KEYCODE_PROG_YELLOW) {
+            startActivity(Intent(this, DiagnosticoActivity::class.java))
+            return true
+        }
         return super.onKeyDown(keyCode, event)
     }
 
