@@ -57,9 +57,14 @@ object Instalador {
         nomeArquivo: String,
         aoProgredir: (Int) -> Unit = {}
     ): File? = withContext(Dispatchers.IO) {
-        var con: HttpURLConnection? = null
+        val con = try {
+            URL(url).openConnection() as HttpURLConnection
+        } catch (e: Exception) {
+            Registro.linha("erro ao abrir $url: ${e.message}")
+            return@withContext null
+        }
+
         try {
-            con = URL(url).openConnection() as HttpURLConnection
             con.connectTimeout = 30_000
             con.readTimeout = 60_000
             con.instanceFollowRedirects = true
@@ -102,7 +107,7 @@ object Instalador {
             Registro.linha("erro no download: ${e.message}")
             null
         } finally {
-            con?.disconnect()
+            con.disconnect()
         }
     }
 }

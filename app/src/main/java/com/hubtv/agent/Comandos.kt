@@ -52,7 +52,7 @@ object Comandos {
         // antigo nunca chegava no 'raw' porque optString devolve "" e nao null
         // quando a chave falta — todo comando digitado solto morria aqui como
         // "comando vazio".
-        val comando = payload?.texto("comando")?.ifBlank { payload.texto("raw") } ?: ""
+        val comando = payload?.let { it.texto("comando").ifBlank { it.texto("raw") } } ?: ""
 
         if (comando.isBlank()) return ResultadoCmd(false, "payload sem 'comando' nem 'raw'")
 
@@ -66,7 +66,7 @@ object Comandos {
         val url = payload?.texto("url") ?: ""
         if (url.isBlank()) return ResultadoCmd(false, "payload sem campo 'url'")
 
-        val pacote = payload.texto("pacote")
+        val pacote = payload?.texto("pacote") ?: ""
         Registro.linha("baixando APK: $url")
 
         return when (val r = Instalador.baixarEInstalar(context, url)) {
@@ -77,7 +77,7 @@ object Comandos {
     }
 
     private suspend fun desinstalarApp(context: Context, payload: JSONObject?): ResultadoCmd {
-        val pacote = payload?.texto("pacote")?.ifBlank { payload.texto("raw") } ?: ""
+        val pacote = payload?.let { it.texto("pacote").ifBlank { it.texto("raw") } } ?: ""
 
         if (pacote.isBlank()) return ResultadoCmd(false, "payload sem 'pacote' nem 'raw'")
 
